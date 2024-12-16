@@ -1,0 +1,4 @@
+python-dotenv==1.0.1
+pyTelegramBotAPI==4.25.0
+google-generativeai
+tenacity==8.1.0
