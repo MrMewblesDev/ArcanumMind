@@ -10,6 +10,7 @@ Functions:
 - get_user_db_id(telegram_id): Retrieves the internal DB id for a user.
 - add_new_chat(user_db_id, chat_name, is_active): Creates a new chat session for a user.
 - get_user_chats(user_db_id): Retrieves all chats for a specific user.
+- deactivate_all_user_chats(user_db_id): Sets all chats for a user to inactive.
 
 Database Schema:
 - Table 'users':
@@ -26,6 +27,7 @@ Database Schema:
 
 import sqlite3
 import os
+import logging
 
 # If DB_PATH environment variable is not set, defaults to "bot_database.db" in the current directory.
 DB_PATH = os.getenv("DB_PATH", "bot_database.db")
@@ -38,45 +40,57 @@ def initialize_db():
 
     This function is idempotent and can be safely called multiple times 
     """
-    # Create connection and cursor. Cursor is essential for all CRUD operations.
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    
-    # Create the 'users' table to store unique user identifiers.
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    telegram_id INTEGER UNIQUE NOT NULL
-    );
-    """)
 
-    # Create the 'chats' table to store chat sessions.
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS chats (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    chat_name TEXT NOT NULL DEFAULT 'Новый чат',
-    is_active BOOLEAN NOT NULL DEFAULT 0,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users (id)
-    );
-    """)
+    logging.info("Initializing initialize_db function...")
 
-    # Create the 'messages' table to store individual messages.
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS messages (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    chat_id INTEGER NOT NULL,
-    role TEXT NOT NULL,
-    content TEXT NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (chat_id) REFERENCES chats (id)
-    );
-    """)
+    try:
+        # Create connection and cursor. Cursor is essential for all CRUD operations.
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        logging.debug(f"Connected to database at {DB_PATH}.")
 
-    # Save database and close connection.
-    conn.commit()
-    conn.close()
+        # Create the 'users' table to store unique user identifiers.
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        telegram_id INTEGER UNIQUE NOT NULL
+        );
+        """)
+        logging.debug("Users table ensured in database.")
+        # Create the 'chats' table to store chat sessions.
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS chats (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        chat_name TEXT NOT NULL DEFAULT 'Новый чат',
+        is_active BOOLEAN NOT NULL DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users (id)
+        );
+        """)
+        logging.debug("Chats table ensured in database.")
+        # Create the 'messages' table to store individual messages.
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        chat_id INTEGER NOT NULL,
+        role TEXT NOT NULL,
+        content TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (chat_id) REFERENCES chats (id)
+        );
+        """)
+        logging.debug("Messages table ensured in database.")
+
+        conn.commit()
+
+        logging.info("Database initialized and tables created if they did not exist.")
+    except sqlite3.Error as e:
+        logging.error(f"Error initializing database: {e}", exc_info=True)
+    finally:
+        if conn: 
+            conn.close()
+            logging.debug("Database connection closed after initialization.")
 
 def add_user_if_not_exists(telegram_id: int):
     """
@@ -85,17 +99,27 @@ def add_user_if_not_exists(telegram_id: int):
     Args:
         telegram_id (int): Unique user identificator.
     """
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
 
-    sql_query = "INSERT OR IGNORE INTO users (telegram_id) VALUES (?)"
+    logging.info(f"Initializing user addition for telegram ID {telegram_id}...")
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
 
-    cursor.execute(sql_query, (telegram_id,))
+        sql_query = "INSERT OR IGNORE INTO users (telegram_id) VALUES (?)"
 
-    conn.commit()
-    conn.close()
+        cursor.execute(sql_query, (telegram_id,))
 
-def get_user_db_id(telegram_id: int):
+        conn.commit()
+        logging.info(f"User with telegram ID {telegram_id} added or already exists.")
+    except sqlite3.Error as e:
+        logging.error(f"Error adding user with telegram ID {telegram_id}: {e}", exc_info=True)
+    finally:
+        if conn:
+            conn.close()
+            logging.debug(f"Database connection closed after adding user with telegram ID {telegram_id}.")
+
+def get_user_db_id(telegram_id: int) -> int | None:
     """
     Gets user inner database id by telegram id. 
     If user doesn't exist in table 'users' function will try to add him.
@@ -106,7 +130,8 @@ def get_user_db_id(telegram_id: int):
     Returns:
         int: The internal database ID of the user or None in case of an unexpected error.
     """
-
+    logging.info(f"Fetching DB ID for telegram ID {telegram_id}...")
+    # Ensure the user exists in the database. If not, add them.
     add_user_if_not_exists(telegram_id)
 
     conn = None
@@ -119,12 +144,19 @@ def get_user_db_id(telegram_id: int):
         cursor.execute(sql_query, (telegram_id,))
         result_tuple = cursor.fetchone()
         if result_tuple:
-            return result_tuple[0]
+            result = result_tuple[0]
+            logging.info(f"Fetched DB ID {result} for telegram ID {telegram_id}.")
+            return result
         else:
-            return None    
+            logging.error(f"No user found with telegram ID {telegram_id}.", exc_info=True)
+            return None
+    except sqlite3.Error as e:
+        logging.error(f"Error fetching DB ID for telegram ID {telegram_id}: {e}", exc_info=True)
+        return None
     finally:
         if conn:
             conn.close()
+            logging.debug(f"Database connection closed after fetching user DB ID for telegram ID {telegram_id}.")
 
 def add_new_chat(user_db_id: int, chat_name: str | None, is_active: bool):
     """
@@ -135,9 +167,9 @@ def add_new_chat(user_db_id: int, chat_name: str | None, is_active: bool):
         chat_name (str): The chat name. Defaults to "Новый чат".
         is_active (bool): The boolean variable to indicate chat activity.
     Returns:
-        int: The ID of the newly created chat.
+        int: The ID of the newly created chat or None in case of an unexpected error.
     """
-    
+    logging.info(f"Adding new chat for user {user_db_id}...")
     conn = None
 
     try:
@@ -150,13 +182,17 @@ def add_new_chat(user_db_id: int, chat_name: str | None, is_active: bool):
         conn.commit()
 
         new_chat_id = cursor.lastrowid
+        logging.info(f"New chat added with ID {new_chat_id} for user {user_db_id}.")
 
         return new_chat_id
+    except sqlite3.Error as e:
+        logging.error(f"Error adding new chat for user {user_db_id}: {e}", exc_info=True)
+        return None
     finally:
         if conn:
             conn.close()
 
-def get_user_chats(user_db_id: int):
+def get_user_chats(user_db_id: int) -> list[dict] | None:
     """
     Gets list of all user's chats by inner id.
 
@@ -164,8 +200,9 @@ def get_user_chats(user_db_id: int):
         user_db_id (int): The internal database ID of the user.
     
     Returns:
-        list[dict]: a list of dictionaries where each one represents a chat.
+        list[dict]: a list of dictionaries where each one represents a chat or None in case of an unexpected error.
     """
+    logging.info(f"Fetching chats for user {user_db_id}...")
     conn = None
 
     try:
@@ -184,13 +221,59 @@ def get_user_chats(user_db_id: int):
 
         column_names = [description[0] for description in cursor.description]
 
-        return [dict(zip(column_names, chat)) for chat in chats]
+        result = [dict(zip(column_names, chat)) for chat in chats]
+
+        logging.info(f"Fetched {len(result)} chats for user {user_db_id}.")
+        return result
+    except sqlite3.Error as e:
+        logging.error(f"Error fetching chats for user {user_db_id}: {e}", exc_info=True)
+        return None
     finally:
         if conn:
             conn.close()
+            logging.debug(f"Database connection closed after fetching chats for user {user_db_id}.")
+
+def deactivate_all_user_chats(user_db_id: int):
+    """
+    Deactivates all chats for a specific user.
+
+    Args:
+        user_db_id (int): The internal database ID of the user.
+    """
+    logging.info(f"Starting deactivation of all chats for user {user_db_id}...")
+    conn = None
+
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        sql_query = "UPDATE chats SET is_active = 0 WHERE user_id = ?"
+        
+        cursor.execute(sql_query, (user_db_id,))
+
+        conn.commit()
+        logging.info(f"All chats for user {user_db_id} have been deactivated.")
+    except sqlite3.Error as e:
+        logging.error(f"Error deactivating chats for user {user_db_id}: {e}", exc_info=True)
+    finally:
+        if conn:
+            conn.close()
+            logging.debug(f"Database connection closed after deactivating chats for user {user_db_id}.")
+
+
 
         
 
 
 if __name__ == '__main__':
+
+    # Get log level from environment variable, default to INFO if not set
+    log_level = os.getenv("LOG_LEVEL", "INFO").upper()
+
+    # Set up logging configuration
+    logging.basicConfig(level=log_level, format='%(asctime)s - %(levelname)s - %(module)s - %(message)s')
+    logging.info("Logging is set up.")
+
+    logging.info("Database is initializing...")
     initialize_db()
+    logging.info("Database initialized successfully.")
