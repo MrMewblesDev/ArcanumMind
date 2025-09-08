@@ -6,14 +6,28 @@ import re
 import database as db
 import logging
 
-# Set up logging configuration
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
 # Load environment variables from a .env file
 load_dotenv()
 user_contexts = {}
 
+def setup_logging():
+    """
+    Sets up logging for the application.
+    """
+    # Get log level from environment variable, default to INFO if not set
+    log_level = os.getenv("LOG_LEVEL", "INFO").upper()
+
+    # Set up logging configuration
+    logging.basicConfig(level=log_level, format='%(asctime)s - %(levelname)s - %(module)s - %(message)s')
+    logging.info("Logging is set up.")
+
+setup_logging()
+
 def setup_bot():
+    """
+    Sets up the Telegram bot using the API token from environment variables.
+    """
+
     logging.info("Bot setup is initializing...")
 
     TOKEN = os.getenv("TOKEN")
@@ -26,11 +40,15 @@ def setup_bot():
         bot = telebot.TeleBot(TOKEN)
         logging.info("Bot is initialized successfully.")
         return bot
-    except Exception as e:
+    except telebot.TeleBotException as e:
         logging.error(f"Error initializing the bot: {e}")
         exit(1)
     
 def setup_ai():
+    """
+    Sets up the Gemini AI model using the API key from environment variables.
+    """
+
     logging.info("Gemini model is initializing...")
 
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
@@ -46,13 +64,23 @@ def setup_ai():
 
             logging.info("Gemini model is initialized successfully.")
             return model
-        except Exception as e:
+        except genai.Error as e:
             logging.error(f"Error initializing the AI model: {e}")
 
 bot = setup_bot()
 model = setup_ai()
 
 def generate_gemini_response(prompt: str) -> str | None:
+    """
+    Generates a response from the Gemini AI model based on the provided prompt.
+
+    Args:
+        prompt (str): The input prompt for the AI model.
+
+    Returns:
+        str | None: The generated response from the AI model, or None if an error occurs.
+    """
+
     if not model:
         logging.error("Error: Gemini model is not initialized.")
         return None
@@ -60,8 +88,31 @@ def generate_gemini_response(prompt: str) -> str | None:
     try: 
         response = model.generate_content(prompt)
         return response.text
-    except Exception as e:
+    except genai.Error as e:
         logging.error(f"Error generating response from AI model: {e}")
+        return None
+
+def get_or_create_user_db_id(telegram_id: int) -> int | None:
+    """
+    Retrieves the internal database ID for a user based on their Telegram ID.
+
+    If the user does not exist in the database, they are added.
+
+    Args:
+        telegram_id (int): The unique Telegram ID of the user.
+
+    Returns:
+        int | None: The internal database ID of the user, or None if an error occurs.
+    """
+    logging.info(f"Retrieving or creating user with Telegram ID {telegram_id}...")
+
+    user_db_id = db.get_user_db_id(telegram_id)
+
+    if user_db_id is not None:
+        logging.info(f"Successfully retrieved DB ID {user_db_id} for Telegram ID {telegram_id}.")
+        return user_db_id
+    else:
+        logging.error(f"Failed to get or create user with Telegram ID {telegram_id}. See previous logs for details.")
         return None
 
 @bot.message_handler(commands=['start'])
@@ -69,7 +120,13 @@ def main(message):
 
     # Add user to our database if it doesn't exist yet
     user_id = message.from_user.id
-    db.add_user_if_not_exists(user_id)
+    get_or_create_user_db_id(user_id)
+    user_db_id = get_or_create_user_db_id(user_id)
+    if user_db_id is None:
+        bot.send_message(message.chat.id, "Произошла ошибка при работе с базой данных. Пожалуйста, попробуйте снова позже.")
+        logging.error(f"Error: Unable to retrieve or create user with Telegram ID {user_id}.", exc_info=True)
+        return
+    # Now user is guaranteed to be in the database.
 
     # message - contains information about user and chat
     # this function is called every time "/start" is used
@@ -85,29 +142,74 @@ def help(message):
                           "/start - начать диалог\n"
                           "/help - получить помощь\n"
                           "/new_ai_chat - начать чат с ИИ\n"
-                          "/stop_ai_chat - остановить чат с ИИ\n", parse_mode="html")
+                          "/stop_ai_chat - остановить чат с ИИ\n"
+                          "/list_chats - показать все чаты с ИИ\n", parse_mode="html")
 
 
 @bot.message_handler(commands=['new_ai_chat'])
 def start_ai_chat(message):
-    chatid = message.chat.id
+    logging.info(f"Function start_ai_chat is called by user ID {message.from_user.id}.")
+    # Get user's internal database ID for further operations
+    user_id = message.from_user.id
+    user_db_id = get_or_create_user_db_id(user_id)
 
-    if chatid in user_contexts:
-        bot.reply_to(message, "Режим чата с ИИ уже запущен. Остановите его с помощью команды /stop_ai_chat или продолжайте общение.")
+    # Check if user_db_id is valid and handle the error if not
+    if user_db_id is None:
+        bot.reply_to(message, "Произошла ошибка при работе с базой данных. Пожалуйста, попробуйте снова позже.")
+        logging.error(f"Error: Unable to retrieve or create user with Telegram ID {user_id}.", exc_info=True)
     else:
-        user_contexts[chatid] = []
-        bot.reply_to(message, "Вы запустили режим чата с ИИ. Теперь можете задавать вопросы ИИ.")
-
-
+        # Deactivate all user's active chats before starting a new one
+        db.deactivate_all_user_chats(user_db_id)
+        logging.info(f"Function deactivate_all_user_chats executed for user ID {user_id} (DB ID: {user_db_id}).")
+        # Add a new chat for the user in the database. 
+        # Currently, chat_name is hardcoded, should be fixed later.
+        chat_name = "Chat with AI"
+        new_chat_id = db.add_new_chat(user_db_id, chat_name, True)
+        if new_chat_id:
+            bot.reply_to(message, "Вы начали новый чат с ИИ. Теперь вы можете задавать вопросы ИИ.")
+            logging.info(f"Function add_new_chat executed for user ID {user_id} (DB ID: {user_db_id}).")
+        else:
+            bot.reply_to(message, "Произошла ошибка при создании нового чата. Пожалуйста, попробуйте снова позже.")
+            logging.error(f"Error: Unable to create new chat for user ID {user_id} (DB ID: {user_db_id}).", exc_info=True)
 
 @bot.message_handler(commands=['stop_ai_chat'])
 def stop_ai_chat(message):
-    chatid = message.chat.id
-    if chatid in user_contexts:
-        del user_contexts[chatid]
-        bot.reply_to(message, "Вы остановили режим чата с ИИ.")
+    # Get user's internal database ID for further operations
+    user_id = message.from_user.id
+    user_db_id = get_or_create_user_db_id(user_id)
+    # Check if user_db_id is valid and handle the error if not
+    if user_db_id is None:
+        bot.reply_to(message, "Произошла ошибка при работе с базой данных. Пожалуйста, попробуйте снова позже.")
+        logging.error(f"Error: Unable to retrieve or create user with Telegram ID {user_id}.", exc_info=True)
     else:
-        bot.reply_to(message, "У вас нет актичного чата с ИИ.")
+        db.deactivate_all_user_chats(user_db_id)
+        bot.reply_to(message, "Вы остановили все активные чаты с ИИ.")
+        logging.info(f"Function deactivate_all_user_chats executed for user ID {user_id} (DB ID: {user_db_id}).")
+
+@bot.message_handler(commands=['list_chats'])
+def list_chats(message):
+
+    # Get user's internal database ID for further operations
+    user_id = message.from_user.id
+    user_db_id = get_or_create_user_db_id(user_id)
+    # Check if user_db_id is valid and handle the error if not
+    if user_db_id is None:
+        bot.reply_to(message, "Произошла ошибка при работе с базой данных. Пожалуйста, попробуйте снова позже.")
+        logging.error(f"Error: Unable to retrieve or create user with Telegram ID {user_id}.", exc_info=True)
+    else:
+        logging.info(f"Fetching chats for user ID {user_id} (DB ID: {user_db_id})...")
+
+        chats = db.get_user_chats(user_db_id)
+        if chats:
+            response = "Ваши чаты:\n"
+            for chat in chats:
+                response += f"ID: {chat['id']}, Название: {chat['chat_name']}, Время создания: {chat['created_at']}, Активен: {'Да' if chat['is_active'] else 'Нет'}\n"
+            bot.reply_to(message, response)
+        elif chats is None:
+            bot.reply_to(message, "Произошла ошибка при получении списка чатов. Пожалуйста, попробуйте снова позже.")
+            logging.error(f"Error: Unable to fetch chats for user ID {user_id} (DB ID: {user_db_id}).", exc_info=True)
+        else:
+            bot.reply_to(message, "У вас нет сохраненных чатов.")
 
 # This function is handling every message bot receives that didn't match any previous commands.
 @bot.message_handler(func=lambda message: True)
@@ -192,6 +294,7 @@ def ask_gemini(prompt: str) -> None | str:
 
 
 if __name__ == "__main__":
+
     # Initializing the database before starting the bot
     logging.info("Database is initializing...")
     db.initialize_db()
