@@ -65,9 +65,13 @@ Create a `.env` file in the root directory of the project and add your Telegram 
 ```
 TOKEN=YOUR_TELEGRAM_BOT_TOKEN
 GEMINI_API_KEY=YOUR_GOOGLE_GEMINI_API_KEY
+GEMINI_MODEL=YOUR_GEMINI_MODEL
+LOG_LEVEL=YOUR_LOG_LEVEL
 ```
-*   **`TOKEN`**: Obtain this from BotFather on Telegram.
-*   **`GEMINI_API_KEY`**: Get this from the Google AI Studio.
+*   **`TOKEN`** [REQUIRED]: Obtain this from BotFather on Telegram.
+*   **`GEMINI_API_KEY`** [REQUIRED]: Get this from the Google AI Studio.
+*   **`GEMINI_MODEL`**: Choose your preferable gemini model, defaults to gemini-2.5-pro if not set (See [gemini models](https://ai.google.dev/gemini-api/docs/models)). **This bot supports only text output models right now!**
+*   **`LOG_LEVEL`**: Choose your preferable logging priority, defaults to INFO if not set.
 
 ### 5. Initialize the Database
 
