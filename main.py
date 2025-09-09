@@ -52,6 +52,7 @@ def setup_ai():
     logging.info("Gemini model is initializing...")
 
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+    GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-pro")  # Default model if not specified
 
     # Checks if the Gemini API key is set; if not, AI functionality will be unavailable. 
     if not GEMINI_API_KEY:
@@ -60,7 +61,7 @@ def setup_ai():
         try: 
             genai.configure(api_key=GEMINI_API_KEY)
 
-            model = genai.GenerativeModel("gemini-2.5-pro") # You can change the model here if needed.
+            model = genai.GenerativeModel(GEMINI_MODEL) # Uses the model specified in the environment variable
 
             logging.info("Gemini model is initialized successfully.")
             return model
