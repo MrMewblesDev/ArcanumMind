@@ -9,7 +9,8 @@ import logging
 
 # Load environment variables from a .env file
 load_dotenv()
-user_contexts = {}
+# Dictionary to store user contexts for active AI chats.
+# user_contexts = {} # Currently is going to be replaced with database storage.
 
 def setup_logging():
     """
@@ -174,7 +175,7 @@ def help(message):
 
 @bot.message_handler(commands=['new_ai_chat'])
 def start_ai_chat(message):
-    logging.info(f"Function start_ai_chat is called by user ID {message.from_user.id}.")
+    logging.info(f"Creating new AI chat for user ID {message.from_user.id}...")
     # Get user's internal database ID for further operations
     user_id = message.from_user.id
     user_db_id = get_or_create_user_db_id(user_id)
@@ -184,9 +185,13 @@ def start_ai_chat(message):
         bot.reply_to(message, "Произошла ошибка при работе с базой данных. Пожалуйста, попробуйте снова позже.")
         logging.error(f"Error: Unable to retrieve or create user with Telegram ID {user_id}.", exc_info=True)
     else:
-        # Deactivate all user's active chats before starting a new one
-        db.deactivate_all_user_chats(user_db_id)
-        logging.info(f"Function deactivate_all_user_chats executed for user ID {user_id} (DB ID: {user_db_id}).")
+        # Check if user already has an active chat. If yes, inform them and
+        if db.does_user_have_active_chat(user_db_id):
+            logging.debug(f"Aborting new chat creation: User ID {user_id} (DB ID: {user_db_id}) already has an active chat.")
+            bot.reply_to(message, "У вас уже есть активный чат с ИИ. Пожалуйста, завершите его перед началом нового воспользовавшись командой /stop_ai_chat.")
+            return
+        
+        # If no, create a new chat and inform them.
         # Add a new chat for the user in the database. 
         # Currently, chat_name is hardcoded, should be fixed later.
         chat_name = "Chat with AI"
@@ -208,6 +213,11 @@ def stop_ai_chat(message):
         bot.reply_to(message, "Произошла ошибка при работе с базой данных. Пожалуйста, попробуйте снова позже.")
         logging.error(f"Error: Unable to retrieve or create user with Telegram ID {user_id}.", exc_info=True)
     else:
+        if not db.does_user_have_active_chat(user_db_id):
+            logging.debug(f"Aborting chat deactivation: User ID {user_id} (DB ID: {user_db_id}) has no active chats.")
+            bot.reply_to(message, "У вас нет активных чатов с ИИ. Пожалуйста, начните новый чат с помощью команды /new_ai_chat.")
+            return
+
         db.deactivate_all_user_chats(user_db_id)
         bot.reply_to(message, "Вы остановили все активные чаты с ИИ.")
         logging.info(f"Function deactivate_all_user_chats executed for user ID {user_id} (DB ID: {user_db_id}).")
@@ -238,40 +248,41 @@ def list_chats(message):
             bot.reply_to(message, "У вас нет сохраненных чатов.")
 
 # This function is handling every message bot receives that didn't match any previous commands.
-@bot.message_handler(func=lambda message: True)
-def echo_all(message):
-    chatid = message.chat.id # Gets unique chat id
+# Currently is under development and is commented out.
+# @bot.message_handler(func=lambda message: True)
+# def echo_all(message):
+    # chatid = message.chat.id # Gets unique chat id
 
-    user_message_text = message.text # Gets user's message
+    # user_message_text = message.text # Gets user's message
 
-    if chatid in user_contexts: # Check if user has chat with AI right now
+    # if chatid in user_contexts: # Check if user has chat with AI right now
 
-        chat_history = user_contexts[chatid] # Loading chat history
+    #     chat_history = user_contexts[chatid] # Loading chat history
 
-        chat_history.append({"role": "user", "message": user_message_text}) # Adds user's message to the history of chat
+    #     chat_history.append({"role": "user", "message": user_message_text}) # Adds user's message to the history of chat
 
-        formatted_chat_history = [f'{msg["role"]}: {msg["message"]}' for msg in chat_history] # Creates a list with every message
+    #     formatted_chat_history = [f'{msg["role"]}: {msg["message"]}' for msg in chat_history] # Creates a list with every message
 
-        prompt = "\n".join(formatted_chat_history)
+    #     prompt = "\n".join(formatted_chat_history)
 
-        ai_answer = ask_gemini(prompt)
+    #     ai_answer = ask_gemini(prompt)
         
-        try:
-            if ai_answer:
-                chat_history.append({"role": "assistant", "message": ai_answer}) # Adds Ai's answer to the history of chat
+    #     try:
+    #         if ai_answer:
+    #             chat_history.append({"role": "assistant", "message": ai_answer}) # Adds Ai's answer to the history of chat
 
-                message_chunks = split_message(ai_answer)
-                for chunk in message_chunks:
-                    bot.reply_to(message, chunk)
+    #             message_chunks = split_message(ai_answer)
+    #             for chunk in message_chunks:
+    #                 bot.reply_to(message, chunk)
 
-                # This code executes only for testing purposes:
-                # formatted_chat_history = [f'{msg["role"]}: {msg["message"]}' for msg in chat_history]
-                # prompt = "\n".join(formatted_chat_history)
-                # print(f"AI answered successfully. Chat history: {prompt}")
-        except Exception as e:
-            logging.error(f"Error: {e}") 
-    else:
-        bot.reply_to(message, "Похоже, вы ошиблись, такой команды нет. Введите /help для получения списка действующих команд.")
+    #             # This code executes only for testing purposes:
+    #             # formatted_chat_history = [f'{msg["role"]}: {msg["message"]}' for msg in chat_history]
+    #             # prompt = "\n".join(formatted_chat_history)
+    #             # print(f"AI answered successfully. Chat history: {prompt}")
+    #     except Exception as e:
+    #         logging.error(f"Error: {e}") 
+    # else:
+    #     bot.reply_to(message, "Похоже, вы ошиблись, такой команды нет. Введите /help для получения списка действующих команд.")
 
 
 def split_message(text, chunk_size=4000):
