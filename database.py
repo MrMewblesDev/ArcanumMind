@@ -226,7 +226,7 @@ def get_user_chats(user_db_id: int) -> list[dict] | None:
         logging.info(f"Fetched {len(result)} chats for user {user_db_id}.")
         return result
     except sqlite3.Error as e:
-        logging.error(f"Error fetching chats for user {user_db_id}: {e}", exc_info=True)
+        logging.error(f"Failed to fetch chats for user_db_id {user_db_id}: {e}", exc_info=True)
         return None
     finally:
         if conn:
@@ -260,10 +260,74 @@ def deactivate_all_user_chats(user_db_id: int):
             conn.close()
             logging.debug(f"Database connection closed after deactivating chats for user {user_db_id}.")
 
+def add_message_to_chat(chat_id: int, role: str, content: str):
+    """
+    Adds a new message to a specific chat.
 
+    Args:
+        chat_id (int): The ID of the chat to which the message belongs.
+        role (str): The role of the message sender (e.g., 'user', 'assistant').
+        content (str): The content of the message.
+    """
+    logging.info(f"Adding new message to chat {chat_id}...")
+    conn = None
 
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        sql_query = "INSERT INTO messages (chat_id, role, content) VALUES (?, ?, ?)"
+        cursor.execute(sql_query, (chat_id, role, content))
+
+        conn.commit()
+        logging.info(f"Successfully added message to chat {chat_id}.")
+    except sqlite3.Error as e:
+        logging.error(f"Error adding message to chat {chat_id}: {e}", exc_info=True)
+    finally:
+        if conn:
+            conn.close()
+            logging.debug(f"Database connection closed after adding message to chat {chat_id}.")
+
+def does_user_have_active_chat(user_db_id: int) -> bool:
+    """
+    Checks if user has any active chat.
+
+    Args:
+        user_db_id (int): The internal database ID of the user.
+
+    Returns:
+        bool: True if user has at least one active chat, False if none.
+    """
+    logging.info(f"Checking for active chats for user {user_db_id}...")
+    conn = None
+
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        sql_query = "SELECT COUNT(*) FROM chats WHERE user_id = ? AND is_active = 1"
         
+        cursor.execute(sql_query, (user_db_id,))
 
+        count = cursor.fetchone()[0]
+
+        if count > 1:
+            logging.warning(f"Data integrity issue: User {user_db_id} has {count} active chats.")
+            # Optionally, could deactivate all but one chat here to enforce single active chat rule.
+            deactivate_all_user_chats(user_db_id)
+            # In the future, logic to keep the most recent chat active should be implemented.
+            logging.info(f"All chats for user {user_db_id} have been deactivated to resolve integrity issue.")
+        
+        has_active_chat = count > 0
+        logging.info(f"User {user_db_id} has active chat: {has_active_chat}.")
+        return has_active_chat
+    except sqlite3.Error as e:
+        logging.error(f"Error checking active chats for user {user_db_id}: {e}", exc_info=True)
+        return False
+    finally:
+        if conn:
+            conn.close()
+            logging.debug(f"Database connection closed after checking active chats for user {user_db_id}.")
 
 if __name__ == '__main__':
 
