@@ -1,4 +1,5 @@
 import telebot
+from telebot.types import BotCommand
 import google.generativeai as genai
 import os
 from dotenv import load_dotenv
@@ -68,7 +69,31 @@ def setup_ai():
         except genai.Error as e:
             logging.error(f"Error initializing the AI model: {e}")
 
+def setup_bot_commands(bot):
+    """
+    Sets up the bot commands that will be visible in the Telegram interface.
+
+    Args:
+        bot (telebot.TeleBot): The Telegram bot instance.
+    """
+    logging.info("Setting up bot commands...")
+
+    commands = [
+        BotCommand("start", "Начать диалог с ботом"),
+        BotCommand("help", "Получить помощь и информацию о боте"),
+        BotCommand("new_ai_chat", "Начать новый чат с ИИ"),
+        BotCommand("stop_ai_chat", "Остановить все активные чаты с ИИ"),
+        BotCommand("list_chats", "Показать все чаты с ИИ"),
+    ]
+
+    try:
+        bot.set_my_commands(commands)
+        logging.info("Successfully set bot commands.")
+    except telebot.TeleBotException as e:
+        logging.error(f"Error setting bot commands: {e}")
+
 bot = setup_bot()
+setup_bot_commands(bot)
 model = setup_ai()
 
 def generate_gemini_response(prompt: str) -> str | None:
