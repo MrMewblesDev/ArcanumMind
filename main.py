@@ -186,7 +186,7 @@ def start_ai_chat(message):
         logging.error(f"Error: Unable to retrieve or create user with Telegram ID {user_id}.", exc_info=True)
     else:
         # Check if user already has an active chat. If yes, inform them and
-        if db.does_user_have_active_chat(user_db_id):
+        if db.user_has_active_chat(user_db_id):
             logging.debug(f"Aborting new chat creation: User ID {user_id} (DB ID: {user_db_id}) already has an active chat.")
             bot.reply_to(message, "У вас уже есть активный чат с ИИ. Пожалуйста, завершите его перед началом нового воспользовавшись командой /stop_ai_chat.")
             return
@@ -213,7 +213,7 @@ def stop_ai_chat(message):
         bot.reply_to(message, "Произошла ошибка при работе с базой данных. Пожалуйста, попробуйте снова позже.")
         logging.error(f"Error: Unable to retrieve or create user with Telegram ID {user_id}.", exc_info=True)
     else:
-        if not db.does_user_have_active_chat(user_db_id):
+        if not db.user_has_active_chat(user_db_id):
             logging.debug(f"Aborting chat deactivation: User ID {user_id} (DB ID: {user_db_id}) has no active chats.")
             bot.reply_to(message, "У вас нет активных чатов с ИИ. Пожалуйста, начните новый чат с помощью команды /new_ai_chat.")
             return

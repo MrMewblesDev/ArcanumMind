@@ -288,7 +288,7 @@ def add_message_to_chat(chat_id: int, role: str, content: str):
             conn.close()
             logging.debug(f"Database connection closed after adding message to chat {chat_id}.")
 
-def does_user_have_active_chat(user_db_id: int) -> bool:
+def user_has_active_chat(user_db_id: int) -> bool:
     """
     Checks if user has any active chat.
 
