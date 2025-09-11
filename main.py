@@ -1,6 +1,7 @@
 import telebot
 from telebot.types import BotCommand
 import google.generativeai as genai
+from google.api_core.exceptions import GoogleAPIError
 import os
 from dotenv import load_dotenv
 import re
@@ -22,6 +23,8 @@ def setup_logging():
     # Set up logging configuration
     logging.basicConfig(level=log_level, format='%(asctime)s - %(levelname)s - %(module)s - %(message)s')
     logging.info("Logging is set up.")
+    logging.getLogger("urllib3.connectionpool").setLevel(logging.WARNING)
+    logging.info("urllib3.connectionpool logging level set to WARNING to prevent API key leakage.")
 
 setup_logging()
 
@@ -67,7 +70,7 @@ def setup_ai():
 
             logging.info("Gemini model is initialized successfully.")
             return model
-        except genai.Error as e:
+        except GoogleAPIError as e:
             logging.error(f"Error initializing the AI model: {e}")
 
 def setup_bot_commands(bot):
@@ -90,7 +93,7 @@ def setup_bot_commands(bot):
     try:
         bot.set_my_commands(commands)
         logging.info("Successfully set bot commands.")
-    except telebot.TeleBotException as e:
+    except telebot.apihelper.ApiException as e:
         logging.error(f"Error setting bot commands: {e}")
 
 bot = setup_bot()
@@ -115,7 +118,7 @@ def generate_gemini_response(prompt: str) -> str | None:
     try: 
         response = model.generate_content(prompt)
         return response.text
-    except genai.Error as e:
+    except GoogleAPIError as e:
         logging.error(f"Error generating response from AI model: {e}")
         return None
 
@@ -145,25 +148,19 @@ def get_or_create_user_db_id(telegram_id: int) -> int | None:
 @bot.message_handler(commands=['start'])
 def main(message):
 
-    # Add user to our database if it doesn't exist yet
-    user_id = message.from_user.id
-    get_or_create_user_db_id(user_id)
-    user_db_id = get_or_create_user_db_id(user_id)
-    if user_db_id is None:
-        bot.send_message(message.chat.id, "Произошла ошибка при работе с базой данных. Пожалуйста, попробуйте снова позже.")
-        logging.error(f"Error: Unable to retrieve or create user with Telegram ID {user_id}.", exc_info=True)
-        return
-    # Now user is guaranteed to be in the database.
-
+    logging.info(f"Received /start command from user ID {message.from_user.id}.")
     # message - contains information about user and chat
     # this function is called every time "/start" is used
     # parse_mode is used for html tag. 
 
     bot.send_message(message.chat.id, "<b>Привет</b>! Меня зовут <u>ArcanumMind</u> (сокращенно Арканум). \nВведи /help для большей информации.", parse_mode="html")
-
+    logging.info(f"Successfully handled /start command for user ID {message.from_user.id}.")
     
 @bot.message_handler(commands=['help'])
 def help(message):
+    logging.info(f"Received /help command from user ID {message.from_user.id}.")
+    # This function is called every time "/help" is used
+    # parse_mode is used for html tag.
     bot.reply_to(message, "Я ArcanumMind, ваш ИИ-помощник (сокращенно Арканум). Моя цель — помогать вам с информацией, отвечать на вопросы и поддерживать увлекательные диалоги. Я здесь, чтобы сделать ваше взаимодействие с ИИ максимально продуктивным и приятным.\n"
                           "Доступные команды:\n"
                           "/start - начать диалог\n"
@@ -171,6 +168,7 @@ def help(message):
                           "/new_ai_chat - начать чат с ИИ\n"
                           "/stop_ai_chat - остановить чат с ИИ\n"
                           "/list_chats - показать все чаты с ИИ\n", parse_mode="html")
+    logging.info(f"Successfully handled /help command for user ID {message.from_user.id}.")
 
 
 @bot.message_handler(commands=['new_ai_chat'])
