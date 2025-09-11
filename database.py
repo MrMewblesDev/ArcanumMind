@@ -11,6 +11,9 @@ Functions:
 - add_new_chat(user_db_id, chat_name, is_active): Creates a new chat session for a user.
 - get_user_chats(user_db_id): Retrieves all chats for a specific user.
 - deactivate_all_user_chats(user_db_id): Sets all chats for a user to inactive.
+- add_message_to_chat(chat_id, role, content): Adds a message to a specific chat.
+- user_has_active_chat(user_db_id): Checks if a user has any active chat.
+- get_chat_history(chat_id): Retrieves the full message history for a specific chat.
 
 Database Schema:
 - Table 'users':
@@ -328,6 +331,47 @@ def user_has_active_chat(user_db_id: int) -> bool:
         if conn:
             conn.close()
             logging.debug(f"Database connection closed after checking active chats for user {user_db_id}.")
+
+def get_chat_history(chat_id: int) -> list[dict] | None:
+    """
+    Retrieves the full message history for a specific chat.
+
+    Args:
+        chat_id (int): The ID of the chat.
+
+    Returns:
+        list[dict]: A list of dictionaries where each dictionary represents a message.
+    """
+    logging.info(f"Fetching message history for chat {chat_id}...")
+    conn = None
+
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        # Fetch messages ordered by creation time to maintain conversation flow.
+        sql_query = "SELECT * FROM messages WHERE chat_id = ? ORDER BY created_at ASC"
+        
+        cursor.execute(sql_query, (chat_id,))
+
+        messages = cursor.fetchall()
+
+        # getting a list of column's names using cursor's attribute.
+        # this is needed for zipping column's names and data in each message using dictionary,
+        # instead of tuple.
+        column_names = [description[0] for description in cursor.description]
+
+        # Create a list of dictionaries for each message.
+        result = [dict(zip(column_names, message)) for message in messages]
+
+        return result
+    except sqlite3.Error as e:
+        logging.error(f"Error fetching message history for chat {chat_id}: {e}", exc_info=True)
+        return None
+    finally:
+        if conn:
+            conn.close()
+            logging.debug(f"Database connection closed after fetching message history for chat {chat_id}.")
 
 if __name__ == '__main__':
 
