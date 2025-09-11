@@ -285,7 +285,7 @@ def add_message_to_chat(chat_id: int, role: str, content: str):
         conn.commit()
         logging.info(f"Successfully added message to chat {chat_id}.")
     except sqlite3.Error as e:
-        logging.error(f"Error adding message to chat {chat_id}: {e}", exc_info=True)
+        logging.error(f"Error adding message to chat {chat_id}. Message content: {content}. Error: {e}", exc_info=True)
     finally:
         if conn:
             conn.close()
