@@ -1,7 +1,7 @@
 import telebot
 from telebot.types import BotCommand
 import google.generativeai as genai
-from google.api_core.exceptions import GoogleAPIError
+from google.api_core.exceptions import GoogleAPIError, ResourceExhausted
 import os
 from dotenv import load_dotenv
 import re
@@ -118,6 +118,9 @@ def generate_gemini_response(prompt: str) -> str | None:
     try: 
         response = model.generate_content(prompt)
         return response.text
+    except ResourceExhausted as e:
+        logging.error(f"Resource exhausted error from AI model: {e}")
+        return "Извините, но в данный момент сервис ИИ недоступен из-за превышения квоты. Пожалуйста, попробуйте позже."
     except GoogleAPIError as e:
         logging.error(f"Error generating response from AI model: {e}")
         return None
@@ -184,11 +187,15 @@ def start_ai_chat(message):
         logging.error(f"Error: Unable to retrieve or create user with Telegram ID {user_id}.", exc_info=True)
     else:
         # Check if user already has an active chat. If yes, inform them and
-        if db.user_has_active_chat(user_db_id):
+        active_chat_id = db.get_active_chat_id(user_db_id)
+        if active_chat_id is None:
+            bot.reply_to(message, "Произошла ошибка при работе с базой данных. Пожалуйста, попробуйте снова позже.")
+            logging.error(f"Error: Unable to check active chats for user ID {user_id} (DB ID: {user_db_id}).", exc_info=True)
+            return
+        elif active_chat_id:
             logging.debug(f"Aborting new chat creation: User ID {user_id} (DB ID: {user_db_id}) already has an active chat.")
             bot.reply_to(message, "У вас уже есть активный чат с ИИ. Пожалуйста, завершите его перед началом нового воспользовавшись командой /stop_ai_chat.")
             return
-        
         # If no, create a new chat and inform them.
         # Add a new chat for the user in the database. 
         # Currently, chat_name is hardcoded, should be fixed later.
@@ -211,14 +218,19 @@ def stop_ai_chat(message):
         bot.reply_to(message, "Произошла ошибка при работе с базой данных. Пожалуйста, попробуйте снова позже.")
         logging.error(f"Error: Unable to retrieve or create user with Telegram ID {user_id}.", exc_info=True)
     else:
-        if not db.user_has_active_chat(user_db_id):
+        active_chat_id = db.get_active_chat_id(user_db_id)
+        if active_chat_id is None:
+            bot.reply_to(message, "Произошла ошибка при работе с базой данных. Пожалуйста, попробуйте снова позже.")
+            logging.error(f"Error: Unable to check active chats for user ID {user_id} (DB ID: {user_db_id}).", exc_info=True)
+            return
+        elif not active_chat_id:
             logging.debug(f"Aborting chat deactivation: User ID {user_id} (DB ID: {user_db_id}) has no active chats.")
             bot.reply_to(message, "У вас нет активных чатов с ИИ. Пожалуйста, начните новый чат с помощью команды /new_ai_chat.")
             return
-
-        db.deactivate_all_user_chats(user_db_id)
-        bot.reply_to(message, "Вы остановили все активные чаты с ИИ.")
-        logging.info(f"Function deactivate_all_user_chats executed for user ID {user_id} (DB ID: {user_db_id}).")
+        else:
+            db.deactivate_all_user_chats(user_db_id)
+            bot.reply_to(message, "Вы остановили все активные чаты с ИИ.")
+            logging.info(f"Function deactivate_all_user_chats executed for user ID {user_id} (DB ID: {user_db_id}).")
 
 @bot.message_handler(commands=['list_chats'])
 def list_chats(message):
@@ -260,12 +272,13 @@ def echo_all(message):
         return
     # Now user is guaranteed to be in the database.
     # Check if user has an active chat. If not, inform them that such command doesn't exist.
-    user_has_active_chat = db.user_has_active_chat(user_db_id)
-    if user_has_active_chat is None:
+    active_chat_id = db.get_active_chat_id(user_db_id)
+
+    if active_chat_id is None:
         bot.reply_to(message, "Произошла ошибка при работе с базой данных. Пожалуйста, попробуйте снова позже.")
         logging.error(f"Error: Unable to check active chats for user ID {user_id} (DB ID: {user_db_id}).", exc_info=True)
         return
-    elif not user_has_active_chat:
+    elif not active_chat_id:
         bot.reply_to(message, "Такой команды нет. Пожалуйста, используйте /help для списка доступных команд. \nЕсли вы хотите начать чат с ИИ, используйте команду /new_ai_chat.")
         logging.info(f"Successfully handled non-command message for user ID {user_id} (DB ID: {user_db_id}) without active chat.")
         return
@@ -373,12 +386,12 @@ def split_message(text, chunk_size=4000):
     return chunks
 
 def ask_gemini(prompt: str) -> None | str:
-    if model:
-        ai_response = generate_gemini_response(prompt)
-        return ai_response
-    else:
+    logging.info("Generating AI response using Gemini model...")
+    if not model:
+        logging.error("Error: Gemini model is not initialized.")
         return None
-
+    else:
+        return generate_gemini_response(prompt)
 
 if __name__ == "__main__":
 
