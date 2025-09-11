@@ -45,7 +45,7 @@ def setup_bot():
         bot = telebot.TeleBot(TOKEN)
         logging.info("Bot is initialized successfully.")
         return bot
-    except telebot.TeleBotException as e:
+    except telebot.apihelper.ApiException as e:
         logging.error(f"Error initializing the bot: {e}")
         exit(1)
     
@@ -57,7 +57,7 @@ def setup_ai():
     logging.info("Gemini model is initializing...")
 
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-    GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-pro")  # Default model if not specified
+    GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")  # Default model if not specified
 
     # Checks if the Gemini API key is set; if not, AI functionality will be unavailable. 
     if not GEMINI_API_KEY:
@@ -288,21 +288,9 @@ def echo_all(message):
         # Get user message and adding it into chat history.
         user_message = message.text
 
-        chat_id = db.get_active_chat_id(user_db_id)
-        # it should never be 0 here, but just in case we check it. 
-        # We don't use "if..elif..else" here because it's easier to read next code this way.
-        if chat_id is None:
-            bot.reply_to(message, "Произошла ошибка при работе с базой данных. Пожалуйста, попробуйте снова позже.")
-            logging.error(f"Error: Unable to fetch active chat ID for user ID {user_id} (DB ID: {user_db_id}).", exc_info=True)
-            return
-        if not chat_id:
-            bot.reply_to(message, "Произошла ошибка при работе с базой данных. Пожалуйста, попробуйте снова позже.")
-            logging.error(f"Error: No active chat found for user ID {user_id} despite earlier check (DB ID: {user_db_id}).", exc_info=True)
-            return
-        
-        db.add_message_to_chat(chat_id, role="user", content=user_message)
+        db.add_message_to_chat(active_chat_id, role="user", content=user_message)
         # Fetch the entire chat history for context.
-        chat_history = db.get_chat_history(chat_id)
+        chat_history = db.get_chat_history(active_chat_id)
 
         if chat_history is None:
             bot.reply_to(message, "Произошла ошибка при получении истории чата. Пожалуйста, попробуйте снова позже.")
@@ -319,8 +307,8 @@ def echo_all(message):
                 else:
                     role = "System"
                 
-                # Optional: include timestamps in the prompt based on environment variable
-                show_time_in_prompt = os.getenv("SHOW_TIME_IN_PROMPT", False).lower()
+                # Optional: include timestamps in the prompt based on environment variable. Default is False.
+                show_time_in_prompt = os.getenv("SHOW_TIME_IN_PROMPT", False).lower() == 'true'
                 if show_time_in_prompt:
                     prompt += f"[{msg['created_at']}] {role}: {msg['content']}\n"
                 else:
@@ -336,7 +324,7 @@ def echo_all(message):
                 return
             else:
                 # Add AI response to chat history in the database.
-                db.add_message_to_chat(chat_id, role="assistant", content=ai_response)
+                db.add_message_to_chat(active_chat_id, role="assistant", content=ai_response)
                 logging.info(f"AI response generated and added to chat history for user ID {user_id} (DB ID: {user_db_id}).")
 
                 # Split the AI response into manageable chunks for Telegram
