@@ -11,6 +11,9 @@ Functions:
 - add_new_chat(user_db_id, chat_name, is_active): Creates a new chat session for a user.
 - get_user_chats(user_db_id): Retrieves all chats for a specific user.
 - deactivate_all_user_chats(user_db_id): Sets all chats for a user to inactive.
+- add_message_to_chat(chat_id, role, content): Adds a message to a specific chat.
+- get_chat_history(chat_id): Retrieves the full message history for a specific chat.
+- get_active_chat_id(user_db_id): Retrieves the ID of the active chat for a user. If multiple active chats are found, all are deactivated to maintain data integrity.
 
 Database Schema:
 - Table 'users':
@@ -226,7 +229,7 @@ def get_user_chats(user_db_id: int) -> list[dict] | None:
         logging.info(f"Fetched {len(result)} chats for user {user_db_id}.")
         return result
     except sqlite3.Error as e:
-        logging.error(f"Error fetching chats for user {user_db_id}: {e}", exc_info=True)
+        logging.error(f"Failed to fetch chats for user_db_id {user_db_id}: {e}", exc_info=True)
         return None
     finally:
         if conn:
@@ -260,10 +263,130 @@ def deactivate_all_user_chats(user_db_id: int):
             conn.close()
             logging.debug(f"Database connection closed after deactivating chats for user {user_db_id}.")
 
+def add_message_to_chat(chat_id: int, role: str, content: str):
+    """
+    Adds a new message to a specific chat.
 
+    Args:
+        chat_id (int): The ID of the chat to which the message belongs.
+        role (str): The role of the message sender (e.g., 'user', 'assistant').
+        content (str): The content of the message.
+    """
+    logging.info(f"Adding new message to chat {chat_id}...")
+    conn = None
 
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        sql_query = "INSERT INTO messages (chat_id, role, content) VALUES (?, ?, ?)"
+        cursor.execute(sql_query, (chat_id, role, content))
+
+        conn.commit()
+        logging.info(f"Successfully added message to chat {chat_id}.")
+    except sqlite3.Error as e:
+        logging.error(f"Error adding message to chat {chat_id}. Message content: {content}. Error: {e}", exc_info=True)
+    finally:
+        if conn:
+            conn.close()
+            logging.debug(f"Database connection closed after adding message to chat {chat_id}.")
+
+def get_chat_history(chat_id: int) -> list[dict] | None:
+    """
+    Retrieves the full message history for a specific chat.
+
+    Args:
+        chat_id (int): The ID of the chat.
+
+    Returns:
+        list[dict]: A list of dictionaries where each dictionary represents a message.
+    """
+    logging.info(f"Fetching message history for chat {chat_id}...")
+    conn = None
+
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        # Fetch messages ordered by creation time to maintain conversation flow.
+        sql_query = "SELECT * FROM messages WHERE chat_id = ? ORDER BY created_at ASC"
         
+        cursor.execute(sql_query, (chat_id,))
 
+        messages = cursor.fetchall()
+
+        # getting a list of column's names using cursor's attribute.
+        # this is needed for zipping column's names and data in each message using dictionary,
+        # instead of tuple.
+        column_names = [description[0] for description in cursor.description]
+
+        # Create a list of dictionaries for each message.
+        result = [dict(zip(column_names, message)) for message in messages]
+
+        return result
+    except sqlite3.Error as e:
+        logging.error(f"Error fetching message history for chat {chat_id}: {e}", exc_info=True)
+        return None
+    finally:
+        if conn:
+            conn.close()
+            logging.debug(f"Database connection closed after fetching message history for chat {chat_id}.")
+
+def get_active_chat_id(user_db_id: int) -> int | None:
+    """
+    Retrieves the ID of the active chat for a user.
+    If multiple active chats are found, all are deactivated to maintain data integrity.
+
+    Args:
+        user_db_id (int): The internal database ID of the user.
+    Returns:
+        int | None: The ID of the active chat, or 0 if not found.
+    """
+    logging.info(f"Retrieving active chat ID for user {user_db_id}...")
+
+    conn = None
+
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        # First, check how many active chats the user has.
+        count_query = "SELECT COUNT(*) FROM chats WHERE user_id = ? AND is_active = 1"
+
+        cursor.execute(count_query, (user_db_id,))
+        # Fetch the count of active chats.
+        active_chat_count = cursor.fetchone()[0]
+
+        if active_chat_count > 1:
+            logging.warning(f"Data integrity issue: User {user_db_id} has {active_chat_count} active chats. Deactivating all to resolve.")
+            # Optionally, could deactivate all but one chat here to enforce single active chat rule.
+            deactivate_all_user_chats(user_db_id)
+            # In the future, logic to keep the most recent chat active should be implemented.
+            logging.info(f"All chats for user {user_db_id} have been deactivated to resolve integrity issue.")
+            return 0
+        elif active_chat_count == 0:
+            logging.info(f"Complete: No active chat found for user {user_db_id}.")
+            return 0
+        else: # active_chat_count == 1
+            # Now, fetch the active chat ID.
+            sql_query = "SELECT id FROM chats WHERE user_id = ? AND is_active = 1"
+            cursor.execute(sql_query, (user_db_id,))
+
+            active_chat = cursor.fetchone()
+
+            if active_chat:
+                logging.info(f"Completed: Found active chat ID {active_chat[0]} for user {user_db_id}.")
+                return active_chat[0]
+            else:
+                logging.error(f"Data integrity issue: No active chat found for user {user_db_id} despite earlier check.")
+                return None
+    except sqlite3.Error as e:
+        logging.error(f"Error retrieving active chat ID for user {user_db_id}: {e}", exc_info=True)
+        return None
+    finally:
+        if conn:
+            conn.close()
+            logging.debug(f"Database connection closed after retrieving active chat ID for user {user_db_id}.")
 
 if __name__ == '__main__':
 
