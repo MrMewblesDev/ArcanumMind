@@ -248,41 +248,93 @@ def list_chats(message):
             bot.reply_to(message, "У вас нет сохраненных чатов.")
 
 # This function is handling every message bot receives that didn't match any previous commands.
-# Currently is under development and is commented out.
-# @bot.message_handler(func=lambda message: True)
-# def echo_all(message):
-    # chatid = message.chat.id # Gets unique chat id
+@bot.message_handler(func=lambda message: True)
+def echo_all(message):
 
-    # user_message_text = message.text # Gets user's message
+    logging.info(f"Initiating message handling for user ID {message.from_user.id}...")
+    user_id = message.from_user.id
+    user_db_id = get_or_create_user_db_id(user_id)
 
-    # if chatid in user_contexts: # Check if user has chat with AI right now
+    # Check if user_db_id is valid and handle the error if not
+    if user_db_id is None:
+        bot.reply_to(message, "Произошла ошибка при работе с базой данных. Пожалуйста, попробуйте снова позже.")
+        logging.error(f"Error: Unable to retrieve or create user with Telegram ID {user_id}.", exc_info=True)
+        return
+    # Now user is guaranteed to be in the database.
+    # Check if user has an active chat. If not, inform them that such command doesn't exist.
+    user_has_active_chat = db.user_has_active_chat(user_db_id)
+    if user_has_active_chat is None:
+        bot.reply_to(message, "Произошла ошибка при работе с базой данных. Пожалуйста, попробуйте снова позже.")
+        logging.error(f"Error: Unable to check active chats for user ID {user_id} (DB ID: {user_db_id}).", exc_info=True)
+        return
+    elif not user_has_active_chat:
+        bot.reply_to(message, "Такой команды нет. Пожалуйста, используйте /help для списка доступных команд. \nЕсли вы хотите начать чат с ИИ, используйте команду /new_ai_chat.")
+        logging.info(f"Successfully handled non-command message for user ID {user_id} (DB ID: {user_db_id}) without active chat.")
+        return
+    else:
+        # User has an active chat, proceed with AI response generation using database context.
+        logging.info(f"User ID {user_id} (DB ID: {user_db_id}) has an active chat. Proceeding with AI response generation.")
+        # Get user message and adding it into chat history.
+        user_message = message.text
 
-    #     chat_history = user_contexts[chatid] # Loading chat history
-
-    #     chat_history.append({"role": "user", "message": user_message_text}) # Adds user's message to the history of chat
-
-    #     formatted_chat_history = [f'{msg["role"]}: {msg["message"]}' for msg in chat_history] # Creates a list with every message
-
-    #     prompt = "\n".join(formatted_chat_history)
-
-    #     ai_answer = ask_gemini(prompt)
+        chat_id = db.get_active_chat_id(user_db_id)
+        # it should never be 0 here, but just in case we check it. 
+        # We don't use "if..elif..else" here because it's easier to read next code this way.
+        if chat_id is None:
+            bot.reply_to(message, "Произошла ошибка при работе с базой данных. Пожалуйста, попробуйте снова позже.")
+            logging.error(f"Error: Unable to fetch active chat ID for user ID {user_id} (DB ID: {user_db_id}).", exc_info=True)
+            return
+        if not chat_id:
+            bot.reply_to(message, "Произошла ошибка при работе с базой данных. Пожалуйста, попробуйте снова позже.")
+            logging.error(f"Error: No active chat found for user ID {user_id} despite earlier check (DB ID: {user_db_id}).", exc_info=True)
+            return
         
-    #     try:
-    #         if ai_answer:
-    #             chat_history.append({"role": "assistant", "message": ai_answer}) # Adds Ai's answer to the history of chat
+        db.add_message_to_chat(chat_id, role="user", content=user_message)
+        # Fetch the entire chat history for context.
+        chat_history = db.get_chat_history(chat_id)
 
-    #             message_chunks = split_message(ai_answer)
-    #             for chunk in message_chunks:
-    #                 bot.reply_to(message, chunk)
+        if chat_history is None:
+            bot.reply_to(message, "Произошла ошибка при получении истории чата. Пожалуйста, попробуйте снова позже.")
+            logging.error(f"Error: Unable to fetch chat history for user ID {user_id} (DB ID: {user_db_id}).", exc_info=True)
+            return
+        else:
+            # Construct the prompt for the AI model using chat history.
+            prompt = ""
+            for msg in chat_history:
+                if msg['role'] == 'user':
+                    role = "User"
+                elif msg['role'] == 'assistant':
+                    role = "AI"
+                else:
+                    role = "System"
+                
+                # Optional: include timestamps in the prompt based on environment variable
+                show_time_in_prompt = os.getenv("SHOW_TIME_IN_PROMPT", False).lower()
+                if show_time_in_prompt:
+                    prompt += f"[{msg['created_at']}] {role}: {msg['content']}\n"
+                else:
+                    prompt += f"{role}: {msg['content']}\n"
 
-    #             # This code executes only for testing purposes:
-    #             # formatted_chat_history = [f'{msg["role"]}: {msg["message"]}' for msg in chat_history]
-    #             # prompt = "\n".join(formatted_chat_history)
-    #             # print(f"AI answered successfully. Chat history: {prompt}")
-    #     except Exception as e:
-    #         logging.error(f"Error: {e}") 
-    # else:
-    #     bot.reply_to(message, "Похоже, вы ошиблись, такой команды нет. Введите /help для получения списка действующих команд.")
+            logging.debug(f"Constructed assistant prompt for user ID {user_id} (DB ID: {user_db_id}): {prompt}")
+
+            ai_response = ask_gemini(prompt)
+
+            if ai_response is None:
+                bot.reply_to(message, "Произошла ошибка при генерации ответа ИИ. Пожалуйста, попробуйте снова позже.")
+                logging.error(f"Error: AI response generation failed for user ID {user_id} (DB ID: {user_db_id}).", exc_info=True)
+                return
+            else:
+                # Add AI response to chat history in the database.
+                db.add_message_to_chat(chat_id, role="assistant", content=ai_response)
+                logging.info(f"AI response generated and added to chat history for user ID {user_id} (DB ID: {user_db_id}).")
+
+                # Split the AI response into manageable chunks for Telegram
+                response_chunks = split_message(ai_response)
+
+                for chunk in response_chunks:
+                    bot.send_message(message.chat.id, chunk)
+                logging.info(f"Successfully sent AI response to user ID {user_id} (DB ID: {user_db_id}).")
+                return
 
 
 def split_message(text, chunk_size=4000):
