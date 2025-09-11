@@ -63,15 +63,17 @@ pip install -r requirements.txt
 Create a `.env` file in the root directory of the project and add your Telegram Bot Token and Google Gemini API Key:
 
 ```
-TOKEN=YOUR_TELEGRAM_BOT_TOKEN
-GEMINI_API_KEY=YOUR_GOOGLE_GEMINI_API_KEY
-GEMINI_MODEL=YOUR_GEMINI_MODEL
-LOG_LEVEL=YOUR_LOG_LEVEL
+TOKEN = "YOUR_TELEGRAM_BOT_TOKEN"
+GEMINI_API_KEY = "YOUR_GOOGLE_GEMINI_API_KEY"
+GEMINI_MODEL = "YOUR_GEMINI_MODEL"
+LOG_LEVEL = "DEBUG"
+SHOW_TIME_IN_PROMPT=true
 ```
 *   **`TOKEN`** [REQUIRED]: Obtain this from BotFather on Telegram.
 *   **`GEMINI_API_KEY`** [REQUIRED]: Get this from the Google AI Studio.
-*   **`GEMINI_MODEL`**: Choose your preferable gemini model, defaults to gemini-2.5-pro if not set (See [gemini models](https://ai.google.dev/gemini-api/docs/models)). **This bot supports only text output models right now!**
+*   **`GEMINI_MODEL`**: Choose your preferable gemini model, defaults to gemini-2.5-flash if not set (See [gemini models](https://ai.google.dev/gemini-api/docs/models)). **This bot supports only text output models right now!**
 *   **`LOG_LEVEL`**: Choose your preferable logging priority, defaults to INFO if not set.
+*   **`SHOW_TIME_IN_PROMPT`**: Set "true" if you want prompt for AI to include time stamps. Defaults to false. 
 
 ### 5. Initialize the Database
 
@@ -95,7 +97,8 @@ python main.py
 *   `/start`: Initiates interaction with the bot and registers the user.
 *   `/help`: Displays a list of available commands and information about the bot.
 *   `/new_ai_chat`: Starts a new conversation session with the AI.
-*   `/stop_ai_chat`: Ends the current AI conversation session.
+*   `/stop_ai_chat`: Ends all active AI conversation sessions.
+*   `/list_chats`: Displays a list of existing conversations with the AI.
 
 ## Future Enhancements
 
