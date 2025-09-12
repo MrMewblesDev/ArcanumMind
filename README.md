@@ -4,6 +4,10 @@
 
 ArcanumMind is an intelligent Telegram bot designed to assist users with various tasks, provide information, and engage in dynamic, context-aware conversations powered by advanced Artificial Intelligence. The bot aims to offer a personalized and helpful experience, leveraging persistent data storage to maintain user and chat context across sessions.
 
+## 🚀 Architectural Upgrade in Progress
+
+**Please note:** The project is currently undergoing a major architectural migration from a synchronous stack (`pyTelegramBotAPI`, `sqlite3`) to a fully asynchronous stack (`aiogram 3`, `SQLAlchemy`). This will significantly improve performance and scalability. The current stable version can be found in the `main` branch or under the `v0.1-sync` tag.
+
 ## Features
 
 *   **AI-Powered Conversations:** Engage in natural language conversations with the bot, powered by the Google Gemini API.
