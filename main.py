@@ -3,12 +3,15 @@ import logging as log
 
 from aiogram import Bot, Dispatcher
 from aiogram.types import BotCommand
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 
 
 from handlers import start_commands, ai_commands
 from config import load_config, load_logging
 from services import gemini_service
 import errors as err
+from database import async_main as async_db_main
+from middlewares.db_session_middleware import DbSessionMiddleware
 
 async def main():
 
@@ -26,15 +29,25 @@ async def main():
     await load_logging(config["LOG_LEVEL"])
     log.info("Logging initialized.")
 
+    # Initialize bot for polling
     log.debug("Initializing bot...")
     bot = Bot(token=config["BOT_TOKEN"])
     log.debug("Bot initialized.")
 
+    # Initialize dispatcher for handling updates
     log.debug("Setting up dispatcher...")
     dp = Dispatcher()
     dp["config"] = config
     log.debug("Dispatcher initialized.")
     log.info("Dispatcher and bot initialized.")
+
+    log.debug("Initializing database...")
+    engine = create_async_engine(config["DB_URL"])
+    session_pool = async_sessionmaker(engine, expire_on_commit=False)
+    dp.updates.middleware(DbSessionMiddleware(session_pool=session_pool))
+    dp["engine"] = engine
+    await async_db_main(engine)
+    log.info("Database initialized.")
 
     log.debug("Initializing gemini...")
     gemini_client, gemini_model = await gemini_service.initialize_gemini(config)

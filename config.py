@@ -12,7 +12,8 @@ async def load_config():
             "GEMINI_API_KEY": os.getenv("GEMINI_API_KEY"),
             "LOG_LEVEL": os.getenv("LOG_LEVEL", "INFO").upper(),
             "GEMINI_MODEL": os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
-            "SHOW_TIME_IN_PROMPT": os.getenv("SHOW_TIME_IN_PROMPT", "False").lower() == "true"
+            "SHOW_TIME_IN_PROMPT": os.getenv("SHOW_TIME_IN_PROMPT", "False").lower() == "true",
+            "DB_URL": os.getenv("DB_URL", "sqlite+aiosqlite:///./arcanum.db")
         }
     except os.error as e:
         print(f"Error: Failed to load configuration: {e}")
@@ -30,6 +31,8 @@ async def load_config():
         raise err.ConfigError("Environment variable GEMINI_MODEL is missing. AI functions won't be available.")
     elif config["SHOW_TIME_IN_PROMPT"] is None:
         raise err.ConfigError("Environment variable SHOW_TIME_IN_PROMPT is missing. AI functions won't be available.")
+    elif config["DB_URL"] is None:
+        raise err.ConfigError("Environment variable DB_URL is missing. Database won't be available.")
     return config
 
 async def load_logging(log_level: str):

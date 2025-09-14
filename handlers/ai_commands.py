@@ -4,7 +4,7 @@ import asyncio
 from aiogram import Router
 from aiogram import types
 from aiogram.filters import Command, CommandObject
-from aiogram.exceptions import TelegramAPIError, TelegramBadRequest, TelegramRetryAfter
+from aiogram.exceptions import TelegramBadRequest, TelegramRetryAfter
 
 from services.gemini_service import ask_gemini, GEMINI_ERROR_FLAG
 
@@ -19,7 +19,7 @@ router = Router()
 async def loading_animation(message: types.Message):
     """Display a loading animation while the AI generates a response."""
     base_text = "Пожалуйста, подождите, генерируется ответ"
-    dots = 0
+    dots = 1
     while True:
         try:
             dots = (dots + 1) % 4
@@ -30,6 +30,9 @@ async def loading_animation(message: types.Message):
 
 @router.message(Command("ask"))
 async def ask(message: types.Message, command: CommandObject, gemini_client: genai.Client, gemini_model: str):
+    """
+    Send a question to the AI and get the response. Does not have memory of previous questions."""
+    
     if not command.args:
         await message.reply("Пожалуйста, введите вопрос после команды.")
         return

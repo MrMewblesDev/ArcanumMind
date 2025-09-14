@@ -3,30 +3,40 @@ from aiogram.filters import CommandStart, Command
 from aiogram.enums import ParseMode
 from aiogram.exceptions import AiogramError
 
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from database import User
+
 import logging
 
 router = Router()
 
 @router.message(CommandStart())
-async def send_welcome(message: types.Message):
+async def send_welcome(message: types.Message, session: AsyncSession):
     """
-    Send a welcome message when the command /start is issued.
+    Handler for the /start command.
+    
+    Checks if the user exists in the database. If not, adds the user.
+    Sends a welcome message.
+    """
+    # Check if user exists
+    stmt = select(User).where(User.telegram_id == message.from_user.id)
+    result = await session.execute(stmt)
+    user = result.scalar_one_or_none()
 
-    This function will send a welcome message to the user when the command /start is used.
-    """
-    text = (
-        "<b>Привет</b>! Меня зовут <u>ArcanumMind</u> (сокращенно Арканум). \nВведи /help для большей информации."
-    )
-    try:
-        # Send the welcome message
+    # If user does not exist, create a new one
+    if user is None:
+        new_user = User(telegram_id=message.from_user.id)
+        session.add(new_user)
+        await session.commit()
         await message.answer(
-            text,
-            parse_mode=ParseMode.HTML
+            f"<b>Привет</b>, {message.from_user.full_name}! Меня зовут <u>ArcanumMind</u> (сокращенно Арканум). \nВведи /help для большей информации."
         )
-    except AiogramError as e:
-        # Log any errors that occur while sending the message
-        logging.error(f"Failed to send welcome message (user_id={message.from_user.id}): {e}")
-
+    else:
+        await message.answer(
+            f"С возвращением, {message.from_user.full_name}! Чем могу помочь?"
+        )
 @router.message(Command("help"))
 async def send_help(message: types.Message):
     """Send a help message when the command /help is used."""
