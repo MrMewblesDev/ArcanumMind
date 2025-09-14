@@ -31,11 +31,13 @@ async def send_welcome(message: types.Message, session: AsyncSession):
         session.add(new_user)
         await session.commit()
         await message.answer(
-            f"<b>Привет</b>, {message.from_user.full_name}! Меня зовут <u>ArcanumMind</u> (сокращенно Арканум). \nВведи /help для большей информации."
+            f"<b>Привет</b>, {message.from_user.full_name}! Меня зовут <u>ArcanumMind</u> (сокращенно Арканум). \nВведи /help для большей информации.",
+            parse_mode=ParseMode.HTML
         )
     else:
         await message.answer(
-            f"С возвращением, {message.from_user.full_name}! Чем могу помочь?"
+            f"<b>С возвращением</b>, {message.from_user.full_name}! Чем могу помочь?",
+            parse_mode=ParseMode.HTML
         )
 @router.message(Command("help"))
 async def send_help(message: types.Message):

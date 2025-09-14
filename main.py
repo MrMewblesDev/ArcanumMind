@@ -44,7 +44,7 @@ async def main():
     log.debug("Initializing database...")
     engine = create_async_engine(config["DB_URL"])
     session_pool = async_sessionmaker(engine, expire_on_commit=False)
-    dp.updates.middleware(DbSessionMiddleware(session_pool=session_pool))
+    dp.update.middleware(DbSessionMiddleware(session_pool=session_pool))
     dp["engine"] = engine
     await async_db_main(engine)
     log.info("Database initialized.")

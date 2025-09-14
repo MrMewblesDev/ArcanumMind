@@ -162,5 +162,5 @@ cython_debug/
 #.idea/
 
 # Project-specific files to ignore
-bot_database.db
+arcanum.db
 .vscode/
