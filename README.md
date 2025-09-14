@@ -2,31 +2,31 @@
 
 ## Project Overview
 
-ArcanumMind is an intelligent Telegram bot designed to assist users with various tasks, provide information, and engage in dynamic, context-aware conversations powered by advanced Artificial Intelligence. The bot aims to offer a personalized and helpful experience, leveraging persistent data storage to maintain user and chat context across sessions.
+ArcanumMind is an intelligent Telegram bot designed to assist users with various tasks, provide information, and engage in dynamic, context-aware conversations powered by advanced Artificial Intelligence. The bot aims to offer a personalized and helpful experience, leveraging persistent data storage to maintain user context across sessions.
 
-## 🚀 Architectural Upgrade in Progress
+## 🚀 Architectural Upgrade Complete
 
-**Please note:** The project is currently undergoing a major architectural migration from a synchronous stack (`pyTelegramBotAPI`, `sqlite3`) to a fully asynchronous stack (`aiogram 3`, `SQLAlchemy`). This will significantly improve performance and scalability. The current stable version can be found in the `main` branch or under the `v0.1-sync` tag.
+**Please note:** This project has recently undergone a major architectural migration from a synchronous stack (`pyTelegramBotAPI`, `sqlite3`) to a fully asynchronous stack (`aiogram 3`, `SQLAlchemy`). This significantly improves performance, scalability, and maintainability.
 
 ## Features
 
-*   **AI-Powered Conversations:** Engage in natural language conversations with the bot, powered by the Google Gemini API.
-*   **Persistent Chat History:** All chat interactions are stored in a SQLite database, allowing for continuous and context-aware dialogues.
-*   **User Management:** Tracks individual users, enabling personalized experiences and settings.
-*   **Multi-Chat Support:** Manages multiple chat sessions for each user, allowing for different conversation contexts.
-*   **Scalable Database:** Utilizes a normalized SQLite schema for efficient and robust data management of users, chats, and messages.
+*   **Asynchronous by Design:** Built on `aiogram`, the bot can handle many concurrent users efficiently without blocking.
+*   **AI-Powered Conversations:** Engage in natural language conversations with the bot, powered by the Google Gemini API with real-time streaming responses.
+*   **Persistent User Management:** User data is stored in a database, allowing the bot to recognize users and provide a continuous experience.
+*   **Robust Database Layer:** Uses `SQLAlchemy 2.0` ORM for type-safe, asynchronous, and reliable database interactions.
+*   **Middleware-Driven:** A database session middleware cleanly manages the lifecycle of database connections for each incoming request.
 *   **Message Chunking:** Automatically splits long AI responses into smaller messages to comply with Telegram's message length limits.
-*   **Logging:** Implemented logging for improved error tracking and debugging.
-
+*   **Structured Logging:** Implemented comprehensive logging for improved error tracking and debugging.
 
 ## Technologies Used
 
 *   **Python:** The core programming language for the bot's logic.
-*   **`python-telegram-bot`:** A powerful and easy-to-use library for interacting with the Telegram Bot API.
+*   **`aiogram`:** A modern, powerful, and fully asynchronous framework for building Telegram bots.
+*   **`SQLAlchemy`:** A comprehensive SQL toolkit and Object-Relational Mapper (ORM) for database interactions.
+*   **`aiosqlite`:** An asynchronous driver for SQLite, used by SQLAlchemy.
 *   **Google Gemini API:** Provides the advanced AI capabilities for generating responses.
-*   **SQLite:** A lightweight, file-based relational database for persistent data storage.
 *   **`python-dotenv`:** For managing environment variables (API keys, tokens).
-*   **`re` (Regular Expressions):** Used for advanced text processing, such as message chunking.
+*   **`re` (Regular Expressions):** Used for advanced text processing, such as intelligent message chunking.
 
 ## Setup and Installation
 
@@ -42,8 +42,7 @@ Follow these steps to get ArcanumMind up and running on your local machine.
 
 ```bash
 git clone https://github.com/MrMewblesDev/ArcanumMind
-cd ArcanumMind
-```
+cd ArcanumMind```
 
 ### 2. Create a Virtual Environment
 
@@ -64,29 +63,24 @@ pip install -r requirements.txt
 
 ### 4. Configure Environment Variables
 
-Create a `.env` file in the root directory of the project and add your Telegram Bot Token and Google Gemini API Key:
+Create a `.env` file in the root directory of the project and add your Telegram Bot Token and other configuration details:
 
 ```
-TOKEN = "YOUR_TELEGRAM_BOT_TOKEN"
-GEMINI_API_KEY = "YOUR_GOOGLE_GEMINI_API_KEY"
-GEMINI_MODEL = "YOUR_GEMINI_MODEL"
-LOG_LEVEL = "DEBUG"
-SHOW_TIME_IN_PROMPT=true
+BOT_TOKEN="YOUR_TELEGRAM_BOT_TOKEN"
+GEMINI_API_KEY="YOUR_GOOGLE_GEMINI_API_KEY"
+GEMINI_MODEL="gemini-2.5-flash"
+LOG_LEVEL="INFO"
+DB_URL="sqlite+aiosqlite:///./arcanum.db"
 ```
-*   **`TOKEN`** [REQUIRED]: Obtain this from BotFather on Telegram.
+*   **`BOT_TOKEN`** [REQUIRED]: Obtain this from BotFather on Telegram.
 *   **`GEMINI_API_KEY`** [REQUIRED]: Get this from the Google AI Studio.
-*   **`GEMINI_MODEL`**: Choose your preferable gemini model, defaults to gemini-2.5-flash if not set (See [gemini models](https://ai.google.dev/gemini-api/docs/models)). **This bot supports only text output models right now!**
-*   **`LOG_LEVEL`**: Choose your preferable logging priority, defaults to INFO if not set.
-*   **`SHOW_TIME_IN_PROMPT`**: Set "true" if you want prompt for AI to include time stamps. Defaults to false. 
+*   **`GEMINI_MODEL`**: The specific text-generation model to use (see [gemini models](https://ai.google.dev/gemini-api/docs/models)).
+*   **`LOG_LEVEL`**: The logging priority (e.g., DEBUG, INFO, WARNING, ERROR). Defaults to `INFO`.
+*   **`DB_URL`**: The connection string for the database. Defaults to a local SQLite file.
 
-### 5. Initialize the Database
+### 5. Database Initialization
 
-The bot uses SQLite for data storage. Run the `database.py` script once to create the necessary tables:
-
-```bash
-python database.py
-```
-This will create a `bot_database.db` file in your project directory.
+**This step is now automatic!** The bot will create the database and tables on its first startup, so no manual script execution is needed.
 
 ## Usage
 
@@ -98,16 +92,15 @@ python main.py
 
 ### Available Commands
 
-*   `/start`: Initiates interaction with the bot and registers the user.
+*   `/start`: Initiates interaction with the bot and registers the user in the database.
 *   `/help`: Displays a list of available commands and information about the bot.
-*   `/new_ai_chat`: Starts a new conversation session with the AI.
-*   `/stop_ai_chat`: Ends all active AI conversation sessions.
-*   `/list_chats`: Displays a list of existing conversations with the AI.
+*   `/ask <question>`: Asks a question to the AI. The AI does not have memory of previous questions in this mode.
 
 ## Future Enhancements
 
+*   **Re-implement Multi-Chat Sessions:** Bring back persistent, context-aware conversations with the AI.
 *   **Telegram Web Apps (TWA):** Integration of TWA for richer user interfaces and interactive elements.
-*   **User Settings:** Implementation of user-specific settings (e.g., preferred AI model, language, tone).
+*   **User Settings:** Implementation of user-specific settings (e.g., preferred AI model, language).
 *   **Multi-language Support:** Full internationalization (i18n) to support multiple user languages.
 
 ## Contributing
