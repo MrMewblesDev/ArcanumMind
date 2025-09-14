@@ -1,0 +1,61 @@
+from google import genai
+from google.genai.errors import APIError as GeminiAPIError
+
+from typing import AsyncGenerator
+
+import logging
+
+GEMINI_ERROR_FLAG = "GEMINI_API_ERROR_OCCURED"
+
+async def initialize_gemini(config: dict):
+    """Initialize the Gemini API client.
+
+    Raises:
+        ConfigError: If the configuration is invalid.
+        GeminiAPIError: If the Gemini API cannot be initialized.
+    """
+    
+    api_key = config.get("GEMINI_API_KEY")
+    model = config.get("GEMINI_MODEL")
+    
+    try:
+        client = genai.Client(api_key=api_key)
+        logging.info("Gemini API configured successfully.")
+        return client, model
+    except GeminiAPIError as e:
+        raise GeminiAPIError(f"Failed to configure Gemini API: {e}")
+    
+async def ask_gemini(prompt: list | str, gemini_client: genai.Client, gemini_model: str) -> AsyncGenerator[str, None]:
+    """Send a prompt to the Gemini API and return the response from the specified model.
+
+    This function will send the given prompt to the Gemini API and then
+    yield each chunk of text received from the AI model.
+
+    Args:
+        prompt (list | str): The prompt to send to the Gemini API.
+        client (genai.Client): The Gemini API client to use.
+        model (str): The AI model to use for generating text.
+
+    Yields:
+        str: The final response from the Gemini API.
+    """
+    try:
+        # Send the prompt to the Gemini API and get a stream of text chunks
+        response_stream = await gemini_client.aio.models.generate_content_stream(
+            model=gemini_model,
+            contents=prompt,
+        )
+
+        # Yield each chunk of text received from the Gemini API
+        async for chunk in response_stream:
+            if chunk.text:
+                # Yield the text chunk
+                yield chunk.text
+    except GeminiAPIError as e:
+        # Log any errors encountered while sending the prompt or getting the response
+        logging.error(f"Error sending prompt to Gemini API: {e}")
+        yield GEMINI_ERROR_FLAG
+    except Exception as e:
+        logging.error(f"An unexpected error occurred in get_response_stream: {e}")
+        yield GEMINI_ERROR_FLAG
+
