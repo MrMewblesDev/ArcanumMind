@@ -1,17 +1,32 @@
 import asyncio
 import logging as log
+import sys
+from functools import partial
+
 
 from aiogram import Bot, Dispatcher
 from aiogram.types import BotCommand
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
-
 
 from handlers import start_commands, ai_commands
 from config import load_config, load_logging
 from services import gemini_service
 import errors as err
-from database import async_main as async_db_main
+from database import configure_db_component, check_db_connection, create_tables
 from middlewares.db_session_middleware import DbSessionMiddleware
+
+async def on_shutdown(dp: Dispatcher):
+    """
+    Shutdown handler for the bot. Disposes the database engine.
+
+    Args:
+        dp (Dispatcher): The dispatcher for the bot.
+
+    """
+    log.info("Shutting down bot...")
+    engine = dp["engine"]
+    if engine:
+        await engine.dispose()
+        log.info("Successfully disposed database engine.")
 
 async def main():
 
@@ -38,15 +53,18 @@ async def main():
     log.debug("Setting up dispatcher...")
     dp = Dispatcher()
     dp["config"] = config
+    dp.shutdown.register(partial(on_shutdown, dp))
     log.debug("Dispatcher initialized.")
     log.info("Dispatcher and bot initialized.")
 
     log.debug("Initializing database...")
-    engine = create_async_engine(config["DB_URL"])
-    session_pool = async_sessionmaker(engine, expire_on_commit=False)
-    dp.update.middleware(DbSessionMiddleware(session_pool=session_pool))
+    engine, session_maker = await configure_db_component(config["DB_URL"])
+    if not await check_db_connection(engine): # Making sure the database connection is working
+        log.critical("Database connection failed. Check previous logs for details.")
+        sys.exit(1)
+    dp.update.middleware(DbSessionMiddleware(session_maker=session_maker))
     dp["engine"] = engine
-    await async_db_main(engine)
+    await create_tables(engine)
     log.info("Database initialized.")
 
     log.debug("Initializing gemini...")
@@ -72,7 +90,8 @@ async def main():
 
     log.debug("Starting polling bot...")
     await dp.start_polling(bot)
-    log.info("Bot started.")
+
+    log.info("Bot is shutting down...")
 
 async def set_default_commands(bot: Bot):
     """
