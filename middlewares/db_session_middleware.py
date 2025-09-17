@@ -4,15 +4,15 @@ from aiogram.types import TelegramObject
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 class DbSessionMiddleware(BaseMiddleware):
-    def __init__(self, session_pool: async_sessionmaker):
+    def __init__(self, session_maker: async_sessionmaker):
         """
         Initialize the middleware with a session factory.
 
         Args:
-            session_pool (async_session_maker): A factory for creating asynchronous database sessions.
+            session_maker (async_session_maker): A factory for creating asynchronous database sessions.
 
         """
-        self.session_pool = session_pool
+        self.session_maker = session_maker
 
     async def __call__(
         self,
@@ -34,7 +34,7 @@ class DbSessionMiddleware(BaseMiddleware):
             Any: The result of calling the handler.
         """
         # Create a database session
-        async with self.session_pool() as session:
+        async with self.session_maker() as session:
             # Add the session to the data
             data["session"] = session
             return await handler(event, data)
