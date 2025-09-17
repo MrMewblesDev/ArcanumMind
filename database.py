@@ -59,6 +59,7 @@ class User(Base):
     telegram_id = Column(Integer, unique=True, nullable=False)
 
     chats = relationship("Chat", back_populates="user", cascade="all, delete-orphan")
+    messages = relationship("Message", back_populates="user", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"User(id={self.id}, telegram_id={self.telegram_id})"
@@ -70,12 +71,28 @@ class Chat(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     chat_name = Column(String, nullable=False)
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default_server=func.now())
+    created_at = Column(DateTime, server_default=func.now())
     
     user = relationship("User", back_populates="chats")
+    messages = relationship("Message", back_populates="chat", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"Chat(id={self.id}, user_id={self.user_id}, chat_name={self.chat_name}, is_active={self.is_active}, created_at={self.created_at})"
+
+class Message(Base):
+    __tablename__ = "messages"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    chat_id = Column(Integer, ForeignKey("chats.id"), nullable=False)
+    content = Column(String, nullable=False)
+    created_at = Column(DateTime, server_default=func.now())
+    
+    user = relationship("User", back_populates="messages")
+    chat = relationship("Chat", back_populates="messages")
+
+    def __repr__(self):
+        return f"Message(id={self.id}, user_id={self.user_id}, chat_id={self.chat_id}, text={self.text}, created_at={self.created_at})"
 
 async def create_tables(engine):
     """An asynchronous function that creates all tables in the database.
