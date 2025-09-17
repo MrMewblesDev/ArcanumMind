@@ -56,14 +56,26 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True)
-
     telegram_id = Column(Integer, unique=True, nullable=False)
+
+    chats = relationship("Chat", back_populates="user", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"User(id={self.id}, telegram_id={self.telegram_id})"
     
-# class Chat(Base):
-#     __tablename__ = "chats"
+class Chat(Base):
+    __tablename__ = "chats"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    chat_name = Column(String, nullable=False)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default_server=func.now())
+    
+    user = relationship("User", back_populates="chats")
+
+    def __repr__(self):
+        return f"Chat(id={self.id}, user_id={self.user_id}, chat_name={self.chat_name}, is_active={self.is_active}, created_at={self.created_at})"
 
 async def create_tables(engine):
     """An asynchronous function that creates all tables in the database.
