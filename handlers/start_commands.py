@@ -28,7 +28,11 @@ async def send_welcome(message: types.Message, session: AsyncSession):
 
     # If user does not exist, create a new one
     if user is None:
-        await user_repo.create(message.from_user.id)
+        await user_repo.create(
+            telegram_id=message.from_user.id,
+            full_name=message.from_user.full_name,
+            username=message.from_user.username
+        )
         welcome_answer = (
             f"<b>Привет</b>, {message.from_user.full_name}! \n"
             "Меня зовут <u>ArcanumMind</u> (сокращенно Арканум). \n"

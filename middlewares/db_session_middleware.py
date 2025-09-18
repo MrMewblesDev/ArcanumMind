@@ -40,7 +40,7 @@ class DbSessionMiddleware(BaseMiddleware):
         Returns:
             Any: The result of calling the handler.
         """
-        update_id = data["update_id"]
+        update_id = event.update_id
 
         log.info("Creating database session for update ID %s...", update_id)
         # Create a database session
