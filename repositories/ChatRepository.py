@@ -2,7 +2,6 @@ import logging
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.exc import SQLAlchemyError
 from database import Chat
 from utils.decorator import db_error_handler
 
