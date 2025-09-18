@@ -5,7 +5,7 @@ from typing import AsyncGenerator
 
 import logging
 
-GEMINI_ERROR_FLAG = "GEMINI_API_ERROR_OCCURED"
+log = logging.getLogger(__name__)
 
 async def initialize_gemini(config: dict):
     """Initialize the Gemini API client.
@@ -20,7 +20,7 @@ async def initialize_gemini(config: dict):
     
     try:
         client = genai.Client(api_key=api_key)
-        logging.info("Gemini API configured successfully.")
+        log.info("Gemini API configured successfully.")
         return client, model
     except GeminiAPIError as e:
         raise GeminiAPIError(f"Failed to configure Gemini API: {e}")
@@ -51,11 +51,8 @@ async def ask_gemini(prompt: list | str, gemini_client: genai.Client, gemini_mod
             if chunk.text:
                 # Yield the text chunk
                 yield chunk.text
-    except GeminiAPIError as e:
-        # Log any errors encountered while sending the prompt or getting the response
-        logging.error(f"Error sending prompt to Gemini API: {e}")
-        yield GEMINI_ERROR_FLAG
-    except Exception as e:
-        logging.error(f"An unexpected error occurred in get_response_stream: {e}")
-        yield GEMINI_ERROR_FLAG
+    except (Exception, GeminiAPIError) as e:
+        log.error("Failed steaming response from Gemini API: %s", e, exc_info=True)
+        raise
+
 
