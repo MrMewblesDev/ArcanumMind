@@ -1,9 +1,15 @@
 class ConfigError(Exception):
-    """Custom exception for configuration-related errors."""
+    """Base exception for configuration-related errors."""
     pass
 
 class BotInitializationError(Exception):
-    """Custom exception for bot initialization errors."""
+    """Base exception for bot initialization errors."""
     pass
 
+class RepositoryError(Exception):
+    """Base exception for repository-related errors."""
+    pass
 
+class ChatNotFoundError(RepositoryError):
+    """Raises when a specific chat is not found."""
+    pass
