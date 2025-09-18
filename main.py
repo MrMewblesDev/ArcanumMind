@@ -1,8 +1,7 @@
 import asyncio
-import logging as log
+import logging
 import sys
 from functools import partial
-
 
 from aiogram import Bot, Dispatcher
 from aiogram.types import BotCommand
@@ -13,6 +12,8 @@ from services import gemini_service
 import errors as err
 from database import configure_db_component, check_db_connection, create_tables
 from middlewares.db_session_middleware import DbSessionMiddleware
+
+log = logging.getLogger(__name__)
 
 async def on_shutdown(dp: Dispatcher):
     """
@@ -118,5 +119,5 @@ if __name__ == "__main__":
     except KeyboardInterrupt as e:
         log.error(f"Bot stopped by user: {e}")
     except Exception as e:
-        log.critical(f"Unexpected error: {e}")
+        log.critical(f"Unexpected error: {e}", exc_info=True)
         raise err.BotInitializationError(f"Bot failed to start due to an unexpected error: {e}")

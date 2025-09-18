@@ -6,18 +6,19 @@ from aiogram import types
 from aiogram.filters import Command, CommandObject
 from aiogram.exceptions import TelegramBadRequest, TelegramRetryAfter
 
-from services.gemini_service import ask_gemini, GEMINI_ERROR_FLAG
-
+from services.gemini_service import ask_gemini
 from utils.split_message import split_message
 
-# for type hinting:
-from google import genai
+from google import genai # for type hinting
+from google.genai.errors import APIError as GeminiAPIError
 
+log = logging.getLogger(__name__)
 router = Router()
 
 
 async def loading_animation(message: types.Message):
     """Display a loading animation while the AI generates a response."""
+    log.debug("Starting loading animation...")
     base_text = "Пожалуйста, подождите, генерируется ответ"
     dots = 1
     while True:
@@ -31,7 +32,9 @@ async def loading_animation(message: types.Message):
 @router.message(Command("ask"))
 async def ask(message: types.Message, command: CommandObject, gemini_client: genai.Client, gemini_model: str):
     """
-    Send a question to the AI and get the response. Does not have memory of previous questions."""
+    Send a question to the AI and get the response. Does not have memory of previous questions.
+    """
+    log.debug("Handling /ask command from user %s", message.from_user.id)
     
     if not command.args:
         await message.reply("Пожалуйста, введите вопрос после команды.")
@@ -39,7 +42,7 @@ async def ask(message: types.Message, command: CommandObject, gemini_client: gen
 
     question = command.args
     TELEGRAM_SAFE_LIMIT = 4000
-    edit_time = 0.8
+    edit_time = 1.5
 
     # Initialization
     text_in_current_msg = ""
@@ -60,10 +63,6 @@ async def ask(message: types.Message, command: CommandObject, gemini_client: gen
                 animation_task.cancel()
                 is_first_chunk = False
 
-            if chunk == GEMINI_ERROR_FLAG:
-                await active_message.edit_text("Произошла ошибка...")
-                break
-
             full_text_for_db += chunk
 
             # Logic for splitting
@@ -83,18 +82,22 @@ async def ask(message: types.Message, command: CommandObject, gemini_client: gen
                     await active_message.edit_text(text_in_current_msg)
 
             await asyncio.sleep(edit_time)
-            
+    
+    except GeminiAPIError:
+        log.error("Gemini API error for user ID %s", message.from_user.id, exc_info=True)
+        if active_message:
+            await active_message.edit_text("Произошла ошибка при обращении к AI. Попробуйте снова.")
     except TelegramRetryAfter as e:
-        logging.warning(f"Flood limit. Sleeping for {e.retry_after}s.")
+        log.warning(f"Flood limit. Sleeping for {e.retry_after}s.")
         await asyncio.sleep(e.retry_after)
     except TelegramBadRequest as e:
-        logging.warning(f"Ignoring bad request: {e}")
+        log.warning(f"Ignoring bad request: {e}")
     except Exception as e:
-        logging.error(f"Critical error in stream loop: {e}", exc_info=True)
+        log.error(f"Critical error in stream loop: {e}", exc_info=True)
         if animation_task and not animation_task.done():
             animation_task.cancel()
         if active_message:
             await active_message.edit_text("Произошла критическая ошибка.")
     
     # Saving into db in the future
-
+    log.debug("Finished ask command for user %s", message.from_user.id)

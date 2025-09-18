@@ -1,14 +1,15 @@
+import logging
 from aiogram import types, Router
 from aiogram.filters import CommandStart, Command
 from aiogram.enums import ParseMode
 from aiogram.exceptions import AiogramError
 
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession # for type hinting
+from sqlalchemy.exc import OperationalError
 
-from database import User
+from repositories.UserRepository import UserRepository
 
-import logging
+log = logging.getLogger(__name__)
 
 router = Router()
 
@@ -20,25 +21,37 @@ async def send_welcome(message: types.Message, session: AsyncSession):
     Checks if the user exists in the database. If not, adds the user.
     Sends a welcome message.
     """
+    log.debug("Handling /start command from user %s", message.from_user.id)
     # Check if user exists
-    stmt = select(User).where(User.telegram_id == message.from_user.id)
-    result = await session.execute(stmt)
-    user = result.scalar_one_or_none()
+    user_repo = UserRepository(session)
+    user = await user_repo.get_by_telegram_id(message.from_user.id)
 
     # If user does not exist, create a new one
     if user is None:
-        new_user = User(telegram_id=message.from_user.id)
-        session.add(new_user)
+        await user_repo.create(
+            telegram_id=message.from_user.id,
+            full_name=message.from_user.full_name,
+            username=message.from_user.username
+        )
+        welcome_answer = (
+            f"<b>Привет</b>, {message.from_user.full_name}! \n"
+            "Меня зовут <u>ArcanumMind</u> (сокращенно Арканум). \n"
+            "Введи /help для большей информации.")
+    else: # User exists
+        welcome_answer = (f"<b>С возвращением</b>, {message.from_user.full_name}! Чем могу помочь?")
+    try:
         await session.commit()
-        await message.answer(
-            f"<b>Привет</b>, {message.from_user.full_name}! Меня зовут <u>ArcanumMind</u> (сокращенно Арканум). \nВведи /help для большей информации.",
-            parse_mode=ParseMode.HTML
-        )
-    else:
-        await message.answer(
-            f"<b>С возвращением</b>, {message.from_user.full_name}! Чем могу помочь?",
-            parse_mode=ParseMode.HTML
-        )
+        await message.answer(welcome_answer, parse_mode=ParseMode.HTML)
+    except AiogramError as e:
+        log.error("Failed to send welcome message (user_id=%s): %s", 
+                  message.from_user.id, e, exc_info=True)
+        await message.answer("Произошла ошибка при отправке приветственного сообщения. Пожалуйста, попробуйте ещё раз.")
+        return
+    except (OperationalError, Exception) as e:
+        log.critical("Failed to commit session (user_id=%s): %s", message.from_user.id, e, exc_info=True)
+        await message.answer("Произошла ошибка при работе с базой данных. Пожалуйста, попробуйте ещё раз.")
+        return
+
 @router.message(Command("help"))
 async def send_help(message: types.Message):
     """Send a help message when the command /help is used."""
@@ -57,4 +70,11 @@ async def send_help(message: types.Message):
         )
     except AiogramError as e:
         # Log any errors that occur while sending the message
-        logging.error(f"Failed to send help message (user_id={message.from_user.id}): {e}")
+        log.error("Failed to send help message (user_id=%s): %s", 
+                  message.from_user.id, e, exc_info=True)
+        await message.answer("Произошла ошибка при отправке помощи. Пожалуйста, попробуйте ещё раз.")
+    except Exception as e:
+        log.critical("Unexpected error when sending help message (user_id=%s): %s", 
+                     message.from_user.id, e, exc_info=True)
+        await message.answer("Произошла непредвиденная ошибка при отправке помощи. Мы уже работаем над её устранением. "
+                             "Пожалуйста, попробуйте ещё раз.")

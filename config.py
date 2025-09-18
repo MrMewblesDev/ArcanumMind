@@ -40,6 +40,13 @@ async def load_logging(log_level: str):
         level=log_level,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     )
-    logging.info(f"Initialized logging at {log_level} level.")
+    log = logging.getLogger(__name__)
+    aiogram_log_level = "WARNING"
+    aiosqlite_log_level = "WARNING"
+    logging.getLogger("aiogram").setLevel(aiogram_log_level)
+    log.info(f"Aiogram logging initialized at {aiogram_log_level} level.")
+    logging.getLogger("aiosqlite").setLevel(aiosqlite_log_level)
+    log.info(f"Aiosqlite logging initialized at {aiosqlite_log_level} level.")
+    log.info(f"Initialized logging at {log_level} level.")
 
 
