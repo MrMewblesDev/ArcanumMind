@@ -11,7 +11,11 @@ class UserRepository:
         self.session = session
 
     async def get_by_telegram_id(self, telegram_id: int) -> User | None:
-        """Gets a user by their Telegram ID."""
+        """Gets a user by their Telegram ID.
+        
+        Returns:
+            User: The user object if found, None otherwise.
+        """
         log.debug("Getting user with Telegram ID: %s", telegram_id)
 
         stmt = select(User).where(User.telegram_id == telegram_id)
@@ -23,13 +27,16 @@ class UserRepository:
             log.debug("User with Telegram ID %s not found.", telegram_id)
         return user
 
-    async def create(self, telegram_id: int) -> User:
+    async def create(self, telegram_id: int, full_name: str, username: str | None = None) -> User:
         """
         Creates a new user and ADDS them to the session.
         Does NOT commit the transaction.
+
+        Returns:
+            User: The created user object.
         """
         log.debug("Creating user with Telegram ID: %s", telegram_id)
-        new_user = User(telegram_id=telegram_id)
+        new_user = User(telegram_id=telegram_id, full_name=full_name, username=username)
         self.session.add(new_user)
         log.debug("User with Telegram ID %s added to the session.", new_user.telegram_id)
         return new_user
