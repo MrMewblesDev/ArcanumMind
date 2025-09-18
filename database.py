@@ -8,7 +8,9 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.sql import text
 
 import enum
-import logging as log
+import logging
+
+log = logging.getLogger(__name__)
 
 Base = declarative_base()
 
