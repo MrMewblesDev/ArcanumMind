@@ -73,21 +73,30 @@ pip install -r requirements.txt
 
 ### 4. Configure Environment Variables
 
-Create a `.env` file in the root directory of the project and add your Telegram Bot Token and other configuration details:
+This project uses environment variables for configuration. A template file, `.env.example`, is included in the repository to make setup straightforward.
 
-```
-BOT_TOKEN="YOUR_TELEGRAM_BOT_TOKEN"
-GEMINI_API_KEY="YOUR_GOOGLE_GEMINI_API_KEY"
-GEMINI_MODEL="gemini-2.5-flash"
-LOG_LEVEL="INFO"
-DB_URL="sqlite+aiosqlite:///./arcanum.db"
+**Step 1: Create your local configuration file**
+
+Copy the template to a new file named `.env`:
+
+```bash
+cp .env.example .env
 ```
 
-*   **`BOT_TOKEN`** [REQUIRED]: Obtain this from BotFather on Telegram.
-*   **`GEMINI_API_KEY`** [REQUIRED]: Get this from the Google AI Studio.
-*   **`GEMINI_MODEL`**: The specific text-generation model to use (see [gemini models](https://ai.google.dev/gemini-api/docs/models)).
-*   **`LOG_LEVEL`**: The logging priority (e.g., DEBUG, INFO, WARNING, ERROR). Defaults to `INFO`.
-*   **`DB_URL`**: The connection string for the database. Defaults to a local SQLite file.
+**Step 2: Edit the variables**
+
+Open the new `.env` file with a text editor. You must provide values for the **Required** variables. The other variables are optional and can be left as they are for default behavior.
+
+| Variable              | Description                                                                 | Default Value                         |
+| --------------------- | --------------------------------------------------------------------------- | ------------------------------------- |
+| **`BOT_TOKEN`**       | **[Required]** Your Telegram Bot Token from BotFather.                        | `none`                                |
+| **`GEMINI_API_KEY`**  | **[Required]** Your API key for the Google Gemini service.                    | `none`                                |
+| `GEMINI_MODEL`        | The Gemini model to use for AI responses.                                   | `"gemini-2.5-flash"`                  |
+| `DB_URL`              | The SQLAlchemy connection string for the main database.                     | `"sqlite+aiosqlite:///./arcanum.db"`    |
+| `TEST_DB_URL`         | The connection string for the test database (used for development).         | `"sqlite+aiosqlite:///./arcanum_test.db"` |
+| `LOG_LEVEL`           | The logging level for the application (e.g., DEBUG, INFO, WARNING).         | `"INFO"`                              |
+| `AIOGRAM_LOG_LEVEL`   | The specific logging level for the `aiogram` library.                       | `"INFO"`                              |
+| `AIOSQLITE_LOG_LEVEL` | The specific logging level for the `aiosqlite` library.                     | `"WARNING"`                           |
 
 ### 5. Database Initialization
 

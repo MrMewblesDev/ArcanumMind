@@ -21,9 +21,9 @@ class Config():
         self.GEMINI_MODEL: Final[str] = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
         self.SHOW_TIME_IN_PROMPT: Final[bool] = os.getenv("SHOW_TIME_IN_PROMPT", "True").upper() == "TRUE"
         self.DB_URL: Final[str] = os.getenv("DB_URL", "sqlite+aiosqlite:///./arcanum.db")
-        
+        self.TEST_DB_URL: Final[str] = os.getenv("TEST_DB_URL", "sqlite+aiosqlite:///./test_arcanum.db")
         # Logging levels for third-party libraries
-        self.AIOGRAM_LOG_LEVEL: Final[str] = os.getenv("AIOGRAM_LOG_LEVEL", "WARNING").upper()
+        self.AIOGRAM_LOG_LEVEL: Final[str] = os.getenv("AIOGRAM_LOG_LEVEL", "INFO").upper()
         self.AIOSQLITE_LOG_LEVEL: Final[str] = os.getenv("AIOSQLITE_LOG_LEVEL", "WARNING").upper()
 
         self._validate()
