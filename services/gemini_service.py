@@ -7,7 +7,7 @@ import logging
 
 log = logging.getLogger(__name__)
 
-async def initialize_gemini(config: dict):
+async def initialize_gemini(GEMINI_API_KEY: str, GEMINI_MODEL: str):
     """Initialize the Gemini API client.
 
     Raises:
@@ -15,13 +15,10 @@ async def initialize_gemini(config: dict):
         GeminiAPIError: If the Gemini API cannot be initialized.
     """
     
-    api_key = config.get("GEMINI_API_KEY")
-    model = config.get("GEMINI_MODEL")
-    
     try:
-        client = genai.Client(api_key=api_key)
+        client = genai.Client(api_key=GEMINI_API_KEY)
         log.info("Gemini API configured successfully.")
-        return client, model
+        return client, GEMINI_MODEL
     except GeminiAPIError as e:
         raise GeminiAPIError(f"Failed to configure Gemini API: {e}")
     

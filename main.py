@@ -7,7 +7,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.types import BotCommand
 
 from handlers import start_commands, ai_commands
-from config import load_config, load_logging
+from config import config
 from services import gemini_service
 import errors as err
 from database import configure_db_component, check_db_connection, create_tables
@@ -21,7 +21,6 @@ async def on_shutdown(dp: Dispatcher):
 
     Args:
         dp (Dispatcher): The dispatcher for the bot.
-
     """
     log.info("Shutting down bot...")
     engine = dp["engine"]
@@ -33,21 +32,16 @@ async def main():
 
     """
     Main entry point of the bot.
-
     Loads configuration, initializes logging, sets up the bot and dispatcher, and starts polling.
-
-    Raises:
-        err.ConfigError: If the configuration is invalid.
     """
 
     # Load configuration and initialize logging
-    config = await load_config()
-    await load_logging(config["LOG_LEVEL"])
-    log.info("Logging initialized.")
+    config.setup_logging()
+    log.info("Logging initialized successfully.")
 
     # Initialize bot for polling
     log.debug("Initializing bot...")
-    bot = Bot(token=config["BOT_TOKEN"])
+    bot = Bot(token=config.BOT_TOKEN)
     log.debug("Bot initialized.")
 
     # Initialize dispatcher for handling updates
@@ -59,7 +53,7 @@ async def main():
     log.info("Dispatcher and bot initialized.")
 
     log.debug("Initializing database...")
-    engine, session_maker = await configure_db_component(config["DB_URL"])
+    engine, session_maker = await configure_db_component(config.DB_URL)
     if not await check_db_connection(engine): # Making sure the database connection is working
         log.critical("Database connection failed. Check previous logs for details.")
         sys.exit(1)
@@ -69,7 +63,7 @@ async def main():
     log.info("Database initialized.")
 
     log.debug("Initializing gemini...")
-    gemini_client, gemini_model = await gemini_service.initialize_gemini(config)
+    gemini_client, gemini_model = await gemini_service.initialize_gemini(config.GEMINI_API_KEY, config.GEMINI_MODEL)
     dp["gemini_client"] = gemini_client
     dp["gemini_model"] = gemini_model
     log.debug("Gemini initialized.")

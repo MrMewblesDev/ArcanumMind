@@ -1,52 +1,73 @@
 import dotenv
 import os
+import sys
 import logging
-import errors as err
+from errors import ConfigError
+from typing import Final 
 
 dotenv.load_dotenv()
 
-async def load_config():
-    try:
-        config = {
-            "BOT_TOKEN": os.getenv("BOT_TOKEN"),
-            "GEMINI_API_KEY": os.getenv("GEMINI_API_KEY"),
-            "LOG_LEVEL": os.getenv("LOG_LEVEL", "INFO").upper(),
-            "GEMINI_MODEL": os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
-            "SHOW_TIME_IN_PROMPT": os.getenv("SHOW_TIME_IN_PROMPT", "False").lower() == "true",
-            "DB_URL": os.getenv("DB_URL", "sqlite+aiosqlite:///./arcanum.db")
-        }
-    except os.error as e:
-        print(f"Error: Failed to load configuration: {e}")
-        return None 
-    
-    if not config:
-        raise err.ConfigError("Configuration is empty or invalid.")
-    elif not config["BOT_TOKEN"]:
-        raise err.ConfigError("Environment variable BOT_TOKEN is missing. Bot cannot start without it.")
-    elif not config["GEMINI_API_KEY"]:
-        raise err.ConfigError("Environment variable GEMINI_API_KEY is missing. AI functions won't be available.")
-    elif config["LOG_LEVEL"] not in ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] or not config["LOG_LEVEL"]:
-        raise err.ConfigError("Environment variable LOG_LEVEL is invalid or missing. Logging will be disabled.")
-    elif not config["GEMINI_MODEL"]:
-        raise err.ConfigError("Environment variable GEMINI_MODEL is missing. AI functions won't be available.")
-    elif config["SHOW_TIME_IN_PROMPT"] is None:
-        raise err.ConfigError("Environment variable SHOW_TIME_IN_PROMPT is missing. AI functions won't be available.")
-    elif config["DB_URL"] is None:
-        raise err.ConfigError("Environment variable DB_URL is missing. Database won't be available.")
-    return config
+class Config():
+    """Config class for storing environment variables."""
+    def __init__(self):
+        """Initializes and validates environment variables."""
 
-async def load_logging(log_level: str):
+        # Required environment variables
+        self.BOT_TOKEN: Final[str] = self._get_required_env("BOT_TOKEN")
+        self.GEMINI_API_KEY: Final[str] = self._get_required_env("GEMINI_API_KEY")
+
+        # Optional environment variables
+        self.LOG_LEVEL: Final[str] = os.getenv("LOG_LEVEL", "INFO").upper()
+        self.GEMINI_MODEL: Final[str] = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+        self.SHOW_TIME_IN_PROMPT: Final[bool] = os.getenv("SHOW_TIME_IN_PROMPT", "True").upper() == "TRUE"
+        self.DB_URL: Final[str] = os.getenv("DB_URL", "sqlite+aiosqlite:///./arcanum.db")
+        self.TEST_DB_URL: Final[str] = os.getenv("TEST_DB_URL", "sqlite+aiosqlite:///./test_arcanum.db")
+        # Logging levels for third-party libraries
+        self.AIOGRAM_LOG_LEVEL: Final[str] = os.getenv("AIOGRAM_LOG_LEVEL", "INFO").upper()
+        self.AIOSQLITE_LOG_LEVEL: Final[str] = os.getenv("AIOSQLITE_LOG_LEVEL", "WARNING").upper()
+
+        self._validate()
+
+    def _get_required_env(self, key: str) -> str:
+        """Retrieves environment variables that are required for the application."""
+        value = os.getenv(key)
+        if not value:
+            raise ConfigError(f"Environment variable {key} is missing or empty.")
+        return value
+    
+    def _validate(self):
+        """Performs validation checks on environment variables."""
+
+        VALID_LOG_LEVELS = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+        if self.LOG_LEVEL not in VALID_LOG_LEVELS:
+            raise ConfigError(f"Invalid log level: {self.LOG_LEVEL}. It must be one of DEBUG, INFO, WARNING, ERROR, CRITICAL.")
+        if self.AIOGRAM_LOG_LEVEL not in VALID_LOG_LEVELS:
+            raise ConfigError(f"Invalid log level: {self.AIOGRAM_LOG_LEVEL}. It must be one of DEBUG, INFO, WARNING, ERROR, CRITICAL.")
+        if self.AIOSQLITE_LOG_LEVEL not in VALID_LOG_LEVELS:
+            raise ConfigError(f"Invalid log level: {self.AIOSQLITE_LOG_LEVEL}. It must be one of DEBUG, INFO, WARNING, ERROR, CRITICAL.")
+
+    def setup_logging(self):
+        """Sets up logging."""
+        logging.basicConfig(
+            level=self.LOG_LEVEL,
+            format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        )
+        # Set up logging
+        log = logging.getLogger(__name__)
+
+        logging.getLogger("aiogram").setLevel(self.AIOGRAM_LOG_LEVEL)
+        log.info(f"Aiogram logging initialized at {self.AIOGRAM_LOG_LEVEL} level.")
+        logging.getLogger("aiosqlite").setLevel(self.AIOSQLITE_LOG_LEVEL)
+        log.info(f"Aiosqlite logging initialized at {self.AIOSQLITE_LOG_LEVEL} level.")
+        
+        log.info(f"Initialized logging at {self.LOG_LEVEL} level.")
+
+try:
+    config = Config()
+except ConfigError as e:
     logging.basicConfig(
-        level=log_level,
+        level="CRITICAL",
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     )
-    log = logging.getLogger(__name__)
-    aiogram_log_level = "WARNING"
-    aiosqlite_log_level = "WARNING"
-    logging.getLogger("aiogram").setLevel(aiogram_log_level)
-    log.info(f"Aiogram logging initialized at {aiogram_log_level} level.")
-    logging.getLogger("aiosqlite").setLevel(aiosqlite_log_level)
-    log.info(f"Aiosqlite logging initialized at {aiosqlite_log_level} level.")
-    log.info(f"Initialized logging at {log_level} level.")
-
-
+    logging.critical("ConfigError: %s", e)
+    sys.exit(1)
